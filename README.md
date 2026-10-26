@@ -5,94 +5,94 @@
 [![Tests Status](https://img.shields.io/badge/tests-19%2F19%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Clean%20%2F%20Zero--Dependency-orange.svg)](docs/ARCHITECTURE.md)
 
-**Smart File Organizer (SFO)** là ứng dụng máy tính toàn diện, chuyên nghiệp giúp dọn dẹp, sắp xếp và tối ưu hóa không gian lưu trữ một cách thông minh, an toàn tuyệt đối. 
+**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, and optimize your file system safely and efficiently.
 
-Ứng dụng sở hữu **giao diện đồ họa Desktop (Modern Dark GUI)** trực quan kết hợp cùng **giao diện dòng lệnh (CLI)** mạnh mẽ, hoạt động độc lập mà **không cần cài thêm bất kỳ thư viện ngoài nào (Zero External Dependencies)**.
-
----
-
-## 🌟 Điểm nổi bật & Tính năng chính
-
-- 🧹 **Tổ chức tệp tin đa năng (Multi-Strategy Organization):**
-  - Tự động phân loại hơn **150+ định dạng tệp** vào các nhóm danh mục rõ ràng (`Images`, `Documents`, `Spreadsheets`, `Presentations`, `Audio`, `Videos`, `Archives`, `Executables`, `Code`, `Fonts`, `3D_and_CAD`, `Torrents`, `Others`).
-  - Hỗ trợ sắp xếp theo **Thời gian** (`YYYY/MM` hoặc `YYYY-MM-DD`).
-  - Hỗ trợ sắp xếp theo **Kích thước** (`Tiny <1MB`, `Small`, `Medium`, `Large`, `Huge >1GB`).
-  - Hỗ trợ quy tắc biểu thức chính quy tùy biến (**Custom Regex Matching**).
-
-- 🔍 **Phát hiện trùng lặp 3 tầng siêu tốc (3-Tiered Deduplication):**
-  - Khắc phục triệt để tình trạng nghẽn đĩa và đứng máy của các tool thông thường:
-    - **Tầng 1 (Size Clustering):** Nhóm file theo kích thước byte chính xác (loại bỏ >90% file không trùng khỏi I/O đĩa).
-    - **Tầng 2 (Fast Partial Hash):** Chỉ đọc và băm 64KB đầu tiên của các ứng viên cùng kích thước.
-    - **Tầng 3 (Full SHA-256 Hash):** Băm toàn phần bảo đảm an toàn 100% dữ liệu.
-  - Tự động cách ly file trùng vào thư mục `_Duplicates/` hoặc xóa an toàn, bảo vệ file gốc tốt nhất theo tiêu chí chọn lựa (cũ nhất, mới nhất, đường dẫn ngắn nhất).
-
-- 🛡️ **An toàn tuyệt đối & Hoàn tác 100% (Transactional Rollback Engine):**
-  - **Chế độ quét thử (Dry-Run):** Xem trước toàn bộ kế hoạch thay đổi dưới dạng bảng chi tiết mà không ghi một byte nào vào ổ cứng.
-  - **Hoàn tác 1-chạm (Undo / Rollback):** Mọi phiên làm việc đều được ghi nhật ký dạng giao dịch (SQLite & JSON Journal). Chỉ với một cú nhấp chuột hoặc lệnh `--undo`, toàn bộ tệp tin được khôi phục về đúng vị trí ban đầu và tự động dọn sạch thư mục rỗng.
-  - **Chống ghi đè vô tình (Smart Collision Resolution):** Tự động phát hiện trùng tên và đánh số thứ tự an toàn `file (1).ext`.
-
-- ⚡ **Trình giám sát tự động thời gian thực (Background Watcher):**
-  - Chạy ngầm như một daemon theo dõi thư mục (ví dụ `Downloads`).
-  - Tích hợp bộ ổn định tải xuống (**Download Stabilization Debounce**): chỉ kích hoạt dọn dẹp khi file đã tải xong hoàn toàn (bỏ qua `.crdownload`, `.tmp`, `.part`).
-
-- 🖥️ **Giao diện kép (Desktop Modern GUI & Rich CLI):**
-  - **Desktop GUI:** Tkinter/ttk với Dark Theme hiện đại, bảng điều khiển thẻ thống kê, cây xem trước tương tác, trung tâm khử trùng lặp và tab lịch sử hoàn tác.
-  - **Rich CLI:** Đầy đủ cờ tham số chuẩn POSIX/GNU, hiển thị màu sắc ANSI, bảng biểu trực quan và xuất báo cáo HTML Dashboard.
+Featuring both an intuitive **Modern Dark Theme Desktop GUI** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero external dependencies** — running entirely on the Python Standard Library.
 
 ---
 
-## 📁 Cấu trúc thư mục dự án
+## 🌟 Highlights & Key Capabilities
+
+- 🧹 **Multi-Strategy Organization:**
+  - Automatically sorts **over 150+ file formats** into organized category directories (`Images`, `Documents`, `Spreadsheets`, `Presentations`, `Audio`, `Videos`, `Archives`, `Executables`, `Code`, `Fonts`, `3D_and_CAD`, `Torrents`, `Others`).
+  - Organizes files chronologically by **Date** (`YYYY/MM` or `YYYY-MM-DD`).
+  - Organizes files by **Size** buckets (`Tiny <1MB`, `Small`, `Medium`, `Large`, `Huge >1GB`).
+  - Supports custom rule matching using **Regular Expressions (Regex)**.
+
+- 🔍 **High-Performance 3-Tiered Deduplication:**
+  - Eliminates disk bottlenecks and freezing caused by traditional full-file hashing:
+    - **Tier 1 (Size Clustering):** Groups files by exact byte size, bypassing >90% of unique files without reading disk contents.
+    - **Tier 2 (Fast Partial Chunk Hash):** Hashes only the first 64 KB of size-matched candidate files.
+    - **Tier 3 (Full Cryptographic SHA-256):** Verifies surviving candidates with full SHA-256 to guarantee 100% bit-for-bit identity.
+  - Automatically quarantines duplicate files into a safe `_Duplicates/` folder or performs safe deletion, preserving the best original file according to your selected policy (`oldest`, `newest`, or `shortest_path`).
+
+- 🛡️ **Zero-Risk Safety & 100% Rollback (Transactional Engine):**
+  - **Dry-Run Mode:** Simulates and displays planned actions in a detailed table without writing or moving a single byte on disk.
+  - **1-Click Undo / Rollback:** Every session is atomically recorded in a transactional journal (SQLite & JSON). A single click or `--undo` command restores all files to their exact original locations and automatically removes newly created empty directories.
+  - **Collision Resolution:** Automatically avoids overwriting files by renaming with incremented counters: `file (1).ext`.
+
+- ⚡ **Real-Time Directory Watcher (Daemon Mode):**
+  - Runs in the background to monitor designated folders (such as `Downloads`).
+  - Features **Download Stabilization Debounce**: waits for file size to stabilize and ignores incomplete downloads (`.crdownload`, `.tmp`, `.part`) before triggering organization.
+
+- 🖥️ **Dual Interface (Desktop GUI & Rich CLI):**
+  - **Modern Desktop GUI:** Built with Tkinter/ttk in a sleek slate dark palette, featuring metric cards, an interactive dry-run table, duplicate manager, and an undo history viewer.
+  - **Rich CLI:** Standard POSIX/GNU flags, colored ANSI formatting, live progress indicators, and standalone HTML dashboard report generation.
+
+---
+
+## 📁 Repository Directory Structure
 
 ```
 File_Organizer/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                 # Pipeline CI chạy kiểm thử tự động trên Windows, Ubuntu, macOS
+│       └── ci.yml                 # Automated CI test pipeline (Windows, Ubuntu, macOS)
 ├── config/
-│   └── default_config.json        # Danh mục 150+ định dạng file và cấu hình chuẩn
+│   └── default_config.json        # 150+ extension mappings and default configuration
 ├── docs/
-│   ├── PRD.md                     # Tài liệu yêu cầu sản phẩm chi tiết
-│   ├── ARCHITECTURE.md            # Tài liệu thiết kế kiến trúc kỹ thuật
-│   ├── CLI_USAGE.md               # Sổ tay hướng dẫn dòng lệnh chi tiết
-│   └── GUI_GUIDE.md               # Hướng dẫn sử dụng giao diện Desktop
-├── smart_file_organizer/          # Gói mã nguồn ứng dụng (Clean Architecture)
-│   ├── core/                      # Động cơ nghiệp vụ lõi (Zero UI Dependency)
+│   ├── PRD.md                     # Product Requirements Document
+│   ├── ARCHITECTURE.md            # Technical Architecture & System Design
+│   ├── CLI_USAGE.md               # Detailed Command-Line Reference Guide
+│   └── GUI_GUIDE.md               # Desktop Graphical User Interface Guide
+├── smart_file_organizer/          # Main application package (Clean Architecture)
+│   ├── core/                      # Domain core engine (Zero external UI dependencies)
 │   │   ├── models.py              # FileInfo, ActionRecord, SessionLog, Enums
-│   │   ├── config.py              # Quản lý cấu hình & nạp overrides
-│   │   ├── scanner.py             # Quét thư mục đệ quy & lọc file ẩn/hệ thống
-│   │   ├── hasher.py              # Băm 3 tầng siêu tốc (Size -> 64KB -> Full SHA256)
-│   │   ├── deduplicator.py        # Phát hiện trùng lặp & lập kế hoạch xử lý
-│   │   ├── organizer.py           # Thuật toán phân loại theo Ext, Date, Size, Regex
-│   │   ├── executor.py            # Thực thi giao dịch an toàn & xử lý va chạm tên
-│   │   ├── undo_manager.py        # Ghi nhật ký SQLite/JSON & rollback 100%
-│   │   ├── watcher.py             # Giám sát nền với cơ chế Debounce
-│   │   └── reporter.py            # Báo cáo Console, Markdown và HTML Dashboard
-│   ├── cli/                       # Giao diện dòng lệnh
-│   │   ├── parser.py              # Xử lý đối số dòng lệnh
-│   │   ├── formatter.py           # Định dạng màu sắc ANSI & bảng ASCII
-│   │   └── app.py                 # Điều phối các lệnh CLI
-│   └── gui/                       # Giao diện đồ họa Desktop
-│       ├── theme.py               # Dark Theme hiện đại cho Tkinter/ttk
-│       ├── components.py          # Thẻ thống kê (StatCard), Bảng dữ liệu (Treeview)
-│       └── app.py                 # Cửa sổ chính Desktop đa tab
-├── tests/                         # Bộ kiểm thử tự động toàn diện (19/19 Tests Pass)
-├── main.py                        # Điểm khởi chạy thống nhất (Tự mở GUI nếu chạy trực tiếp)
-├── pyproject.toml                 # Cấu hình đóng gói chuẩn PEP 621
-├── setup.py                       # Hỗ trợ cài đặt pip install -e .
-├── LICENSE                        # Giấy phép MIT
-└── README.md                      # Tài liệu dự án
+│   │   ├── config.py              # ConfigManager & user override handling
+│   │   ├── scanner.py             # Recursive directory scanner with pattern exclusion
+│   │   ├── hasher.py              # 3-tiered chunked hasher (Size -> 64KB -> SHA-256)
+│   │   ├── deduplicator.py        # Duplicate grouping & keep policy resolution
+│   │   ├── organizer.py           # Organization algorithms (Ext, Date, Size, Regex)
+│   │   ├── executor.py            # Transaction execution & collision handling
+│   │   ├── undo_manager.py        # SQLite/JSON journaling & 100% rollback engine
+│   │   ├── watcher.py             # Background watcher daemon with debounce
+│   │   └── reporter.py            # Console, Markdown, and HTML Dashboard reports
+│   ├── cli/                       # Command-line interface package
+│   │   ├── parser.py              # Argument parsing and validation
+│   │   ├── formatter.py           # ANSI color styles and ASCII table formatters
+│   │   └── app.py                 # CLI controller and command dispatcher
+│   └── gui/                       # Desktop graphical interface package
+│       ├── theme.py               # Modern Slate Dark Theme for Tkinter/ttk
+│       ├── components.py          # Reusable StatCard, FolderPicker, Treeview
+│       └── app.py                 # Multi-tab Desktop GUI main window
+├── tests/                         # Comprehensive automated test suite (19/19 Tests Pass)
+├── main.py                        # Unified entrypoint (auto-launches GUI when run directly)
+├── pyproject.toml                 # Packaging configuration (PEP 621)
+├── setup.py                       # Support for pip install -e .
+├── LICENSE                        # MIT License
+└── README.md                      # Project documentation
 ```
 
 ---
 
-## 🚀 Cài đặt & Khởi chạy
+## 🚀 Installation & Quick Start
 
-### 1. Yêu cầu hệ thống
-- **Hệ điều hành:** Windows 10/11, macOS, hoặc Linux.
-- **Python:** Phiên bản 3.10 trở lên.
-- **Thư viện ngoài:** **0** (Hoạt động hoàn chỉnh với thư viện chuẩn có sẵn của Python).
+### 1. Prerequisites
+- **Operating System:** Windows 10/11, macOS, or Linux.
+- **Python:** Version 3.10 or later.
+- **External Dependencies:** **None** (operates entirely with Python's standard library).
 
-### 2. Tải về (Clone Repository)
+### 2. Clone the Repository
 ```bash
 git clone https://github.com/trtpham/File_Organizer.git
 cd File_Organizer
@@ -100,81 +100,84 @@ cd File_Organizer
 
 ---
 
-## 🖥️ Hướng dẫn sử dụng Giao diện Desktop (GUI)
+## 🖥️ Desktop GUI Usage
 
-Khởi chạy giao diện Desktop bằng lệnh:
+Launch the desktop interface simply by running:
 ```bash
 python main.py
 ```
-*(hoặc `python main.py --gui`)*
+*(or explicitly: `python main.py --gui`)*
 
-Giao diện đồ họa bao gồm 4 tab chuyên dụng:
-1. **🧹 Organize & Clean:** Chọn thư mục nguồn/đích, chọn chiến lược dọn dẹp, bấm **Preview Actions** để xem trước dạng bảng và bấm **Execute Now**.
-2. **🔍 Duplicate Center:** Quét tìm các file trùng lặp nội dung, xem dung lượng lãng phí và chuyển file thừa sang thư mục `_Duplicates/`.
-3. **⏪ Undo & History:** Xem danh sách tất cả các phiên đã dọn dẹp, chọn phiên bất kỳ và bấm **Undo Selected Session** để hoàn tác lại nguyên trạng vị trí ban đầu.
-4. **⚙️ Rules & Settings:** Tra cứu và tùy biến danh sách định dạng file của các nhóm danh mục.
+The GUI provides four dedicated tabs:
+1. **🧹 Organize & Clean:** Select source and destination folders, pick an organization strategy, click **Preview Actions** to inspect the diff table, and click **Execute Now**.
+2. **🔍 Duplicate Center:** Scan for duplicate files, view wasted storage space, and quarantine redundant copies into `_Duplicates/`.
+3. **⏪ Undo & History:** View past organization sessions and click **Undo Selected Session** to instantly restore files to their previous paths.
+4. **⚙️ Rules & Settings:** Inspect and customize supported file extensions and categories.
 
 ---
 
-## ⌨️ Hướng dẫn sử dụng Dòng lệnh (CLI)
+## ⌨️ Command-Line Interface (CLI) Usage
 
-### Các câu lệnh phổ biến:
+### Common Commands:
 
-- **Quét thử chế độ Dry-Run (Khuyên dùng khi bắt đầu):**
+- **Safe Dry-Run Preview (Recommended on first run):**
   ```bash
   python main.py --source "C:/Users/Raven/Downloads" --dry-run
   ```
 
-- **Dọn dẹp và sắp xếp thật vào các thư mục danh mục:**
+- **Live File Organization by Extension Category:**
   ```bash
   python main.py --source "C:/Users/Raven/Downloads"
   ```
 
-- **Sắp xếp ảnh hoặc tài liệu theo Năm/Tháng (`YYYY/MM`):**
+- **Organize Photos or Documents by Date (`YYYY/MM`):**
   ```bash
   python main.py --source "D:/Photos" --by-date
   ```
 
-- **Sắp xếp tệp tin theo nhóm kích thước (Nhỏ, Vừa, Lớn, Khổng lồ):**
+- **Group Files by Size Ranges:**
   ```bash
   python main.py --source "D:/Downloads" --by-size
   ```
 
-- **Tìm và cách ly file trùng lặp nội dung:**
+- **Detect and Quarantine Duplicate Files:**
   ```bash
   python main.py --source "D:/Storage" --dedupe
   ```
 
-- **Hoàn tác phiên dọn dẹp gần nhất (Rollback 100%):**
+- **Rollback the Most Recent Organization Session:**
   ```bash
   python main.py --undo
   ```
 
-- **Xem lịch sử các phiên dọn dẹp trước đây:**
+- **View Past Session History:**
   ```bash
   python main.py --history
   ```
 
-- **Chạy chế độ tự động ngầm theo dõi thư mục Downloads:**
+- **Start Background Watcher Daemon (Auto-organize Downloads):**
   ```bash
   python main.py --source "C:/Users/Raven/Downloads" --watch
   ```
 
-- **Xuất báo cáo thống kê ra file HTML Dashboard:**
+- **Generate Standalone HTML Dashboard Report:**
   ```bash
   python main.py --source "C:/Users/Raven/Downloads" --report "report.html"
   ```
 
+For a complete reference of flags and options, see [CLI Reference Guide](docs/CLI_USAGE.md) or run `python main.py --help`.
+
 ---
 
-## 🧪 Chạy bộ kiểm thử tự động (Unit & Integration Tests)
+## 🧪 Automated Testing
 
-Dự án đi kèm bộ test đầy đủ phủ kín tất cả các module nghiệp vụ lõi:
+Smart File Organizer includes a comprehensive test suite covering scanner filtering, tiered hashing, multi-strategy organization, collision resolution, dry-run simulation, and transaction rollbacks:
+
 ```bash
 python -m pytest -v tests/
 ```
 
-Kết quả:
+### Test Results:
 ```text
 tests/test_cli.py::test_cli_help PASSED                                  [  5%]
 tests/test_cli.py::test_cli_dry_run PASSED                               [ 10%]
@@ -196,31 +199,31 @@ tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 89%]
 tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 94%]
 tests/test_undo.py::test_undo_restores_all_files PASSED                  [100%]
 
-============================= 19 passed in 0.77s ==============================
+============================= 19 passed in 0.36s ==============================
 ```
 
 ---
 
-## 🤝 Đóng góp & Phát triển
+## 🤝 Contributing
 
-Mọi đóng góp, báo cáo lỗi hoặc ý tưởng tính năng mới đều được chào đón nồng nhiệt!
-1. Fork repository.
-2. Tạo nhánh tính năng mới (`git checkout -b feature/AmazingFeature`).
-3. Commit thay đổi của bạn (`git commit -m 'feat: Add some AmazingFeature'`).
-4. Push lên nhánh (`git push origin feature/AmazingFeature`).
-5. Mở một Pull Request.
-
----
-
-## 📄 Bản quyền (License)
-
-Dự án được phân phối dưới giấy phép **MIT License**. Xem file [`LICENSE`](LICENSE) để biết thêm chi tiết.
+Contributions, issues, and feature requests are welcome!
+1. Fork the project.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'feat: Add AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
 
 ---
 
-## 👤 Tác giả
+## 📄 License
 
-- **Tác giả:** Pham Minh Triet (Raven)
+This project is licensed under the **MIT License**. See the [`LICENSE`](LICENSE) file for details.
+
+---
+
+## 👤 Author
+
+- **Author:** Pham Minh Triet (Raven)
 - **Email:** `trietpham1912@gmail.com`
 - **GitHub:** [@trtpham](https://github.com/trtpham)
 - **Repository:** [https://github.com/trtpham/File_Organizer](https://github.com/trtpham/File_Organizer)
