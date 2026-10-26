@@ -1,0 +1,89 @@
+{
+  "version": "2.0.0",
+  "default_organize_strategy": "extension",
+  "strategies": ["extension", "date", "size", "regex"],
+  "date_format": "YYYY/MM",
+  "date_attribute": "modified",
+  "collision_strategy": "auto_rename",
+  "collision_strategies": ["auto_rename", "skip", "compare_hash", "overwrite"],
+  "clean_empty_folders": false,
+  "recursive": false,
+  "ignore_patterns": [
+    ".git",
+    ".svn",
+    ".DS_Store",
+    "desktop.ini",
+    "thumbs.db",
+    "*.tmp",
+    "*.crdownload",
+    "*.part",
+    "*.downloading",
+    "$RECYCLE.BIN",
+    "System Volume Information"
+  ],
+  "size_thresholds": {
+    "Tiny (< 1MB)": [0, 1048576],
+    "Small (1MB - 10MB)": [1048576, 10485760],
+    "Medium (10MB - 100MB)": [10485760, 104857600],
+    "Large (100MB - 1GB)": [104857600, 1073741824],
+    "Huge (> 1GB)": [1073741824, -1]
+  },
+  "deduplication": {
+    "hash_algorithm": "sha256",
+    "partial_chunk_bytes": 65536,
+    "default_action": "move_to_duplicates",
+    "duplicates_folder_name": "_Duplicates",
+    "keep_policy": "oldest"
+  },
+  "watcher": {
+    "debounce_seconds": 3.0,
+    "check_interval_seconds": 2.0
+  },
+  "categories": {
+    "Images": [
+      ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp", ".tiff", ".tif",
+      ".ico", ".raw", ".cr2", ".nef", ".arw", ".heic", ".heif", ".avif", ".psd", ".ai"
+    ],
+    "Documents": [
+      ".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt", ".tex", ".md", ".epub",
+      ".mobi", ".azw3", ".pages", ".wps"
+    ],
+    "Spreadsheets": [
+      ".xls", ".xlsx", ".csv", ".tsv", ".ods", ".numbers", ".xlsm", ".xlsb"
+    ],
+    "Presentations": [
+      ".ppt", ".pptx", ".pps", ".ppsx", ".odp", ".key"
+    ],
+    "Audio": [
+      ".mp3", ".wav", ".aac", ".flac", ".ogg", ".m4a", ".wma", ".alac", ".opus",
+      ".mid", ".midi", ".aiff"
+    ],
+    "Videos": [
+      ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".3gp",
+      ".ts", ".mts", ".vob"
+    ],
+    "Archives": [
+      ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".tgz", ".iso",
+      ".cab", ".z", ".lzma"
+    ],
+    "Executables": [
+      ".exe", ".msi", ".apk", ".dmg", ".app", ".bat", ".cmd", ".ps1", ".vbs",
+      ".sh", ".bin", ".run", ".jar"
+    ],
+    "Code": [
+      ".py", ".java", ".c", ".cpp", ".cs", ".h", ".hpp", ".html", ".htm", ".css",
+      ".js", ".jsx", ".ts", ".tsx", ".vue", ".json", ".xml", ".yaml", ".yml",
+      ".sql", ".php", ".rb", ".go", ".rs", ".swift", ".kt", ".dart", ".lua"
+    ],
+    "Fonts": [
+      ".ttf", ".otf", ".woff", ".woff2", ".eot", ".fon"
+    ],
+    "3D_and_CAD": [
+      ".obj", ".fbx", ".stl", ".blend", ".3ds", ".dae", ".step", ".stp", ".dwg", ".dxf"
+    ],
+    "Torrents": [
+      ".torrent"
+    ]
+  },
+  "custom_regex_rules": []
+}
