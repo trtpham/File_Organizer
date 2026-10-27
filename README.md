@@ -1,17 +1,34 @@
-# Smart File Organizer 📂 (Enterprise Edition v2.1)
+# Smart File Organizer 📂 (Enterprise Edition v2.2)
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Status](https://img.shields.io/badge/tests-31%2F31%20passed-success.svg)](tests/)
+[![Tests Status](https://img.shields.io/badge/tests-39%2F39%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Clean%20%2F%20Zero--Dependency-orange.svg)](docs/ARCHITECTURE.md)
 
-**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, and optimize your file system safely and efficiently.
+**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, analyze, and optimize your file system safely and efficiently.
 
-Featuring an intuitive **Modern Dark Theme Desktop GUI (6 Dedicated Tabs)** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero mandatory external dependencies** — running on the pure Python Standard Library with optional high-fidelity extensions for Pillow and PyMuPDF.
+Featuring an intuitive **Modern Dark Theme Desktop GUI (8 Dedicated Tabs)** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero mandatory external dependencies** — running on the pure Python Standard Library with optional high-fidelity extensions for Pillow and PyMuPDF.
 
 ---
 
 ## 🌟 Highlights & Key Capabilities
+
+- 📊 **Storage Treemap & Disk Analysis:**
+  - Fast recursive disk usage analysis displaying space breakdown across directories.
+  - Interactive 2D slice-and-dice treemap visualization in the GUI.
+  - Instant discovery of top storage-eating files consuming gigabytes of disk space.
+
+- 🧹 **Developer Bloat & Junk Cleaner:**
+  - Scans for abandoned and inactive `node_modules`, Python `.venv`, `__pycache__`, and build artifact directories.
+  - Safe inspection and one-click deletion reclaiming valuable disk space.
+
+- 🛡️ **Secret Scanner (Data Loss Prevention - DLP) & File Quarantine:**
+  - Inspects files for exposed credentials: AWS Access Keys, OpenAI API tokens, GitHub Personal Access Tokens, SSH private keys, and connection strings.
+  - One-click safe quarantine moves compromised files into `_Quarantine/` folder.
+
+- 🪟 **Windows Explorer Context Menu Integration:**
+  - One-click installation of right-click folder context menu ("Smart Organize Here", "Find Duplicates Here", "Open in SFO GUI").
+  - Registers under `HKEY_CURRENT_USER` (HKCU) — **zero Administrator privileges required**.
 
 - 🏷️ **Smart Bulk Renamer (EXIF & ID3 Tags):**
   - Extracts photo metadata (Date Taken, Camera Model, Resolution) and audio metadata (Title, Artist, Album, Track).
@@ -73,6 +90,10 @@ File_Organizer/
 │   │   ├── deduplicator.py        # Duplicate grouping (Exact & Visual) & resolution
 │   │   ├── renamer.py             # Smart Bulk Renamer (EXIF, ID3, Templates, Casing)
 │   │   ├── syncer.py              # USB Drive detector, incremental sync & snapshot archiver
+│   │   ├── treemap.py             # Disk usage tree analyzer & 2D treemap layout engine
+│   │   ├── junk_cleaner.py        # Inactive dev bloat cleaner (node_modules, caches)
+│   │   ├── secret_scanner.py      # DLP secret detector (AWS, OpenAI, GitHub, SSH) & quarantine
+│   │   ├── shell_integration.py   # Windows Explorer HKCU right-click context menu manager
 │   │   ├── smart_filter.py        # PDF text extractor & financial invoice classifier
 │   │   ├── organizer.py           # Organization algorithms (Ext, Date, Size, Regex, Receipts)
 │   │   ├── executor.py            # Transaction execution & collision handling
@@ -86,8 +107,8 @@ File_Organizer/
 │   └── gui/                       # Desktop graphical interface package
 │       ├── theme.py               # Modern Slate Dark Theme for Tkinter/ttk
 │       ├── components.py          # Reusable StatCard, FolderPicker, Treeview
-│       └── app.py                 # 6-Tab Desktop GUI main window
-├── tests/                         # Comprehensive automated test suite (31/31 Tests Pass)
+│       └── app.py                 # 8-Tab Desktop GUI main window
+├── tests/                         # Comprehensive automated test suite (39/39 Tests Pass)
 ├── main.py                        # Unified entrypoint (auto-launches GUI when run directly)
 ├── pyproject.toml                 # Packaging configuration (PEP 621)
 ├── setup.py                       # Support for pip install -e .
@@ -112,7 +133,7 @@ cd File_Organizer
 
 ---
 
-## 🖥️ Desktop GUI Usage (6 Dedicated Tabs)
+## 🖥️ Desktop GUI Usage (8 Dedicated Tabs)
 
 Launch the desktop interface simply by running:
 ```bash
@@ -120,19 +141,44 @@ python main.py
 ```
 *(or explicitly: `python main.py --gui`)*
 
-The GUI provides six dedicated tabs:
+The GUI provides eight dedicated tabs:
 1. **🧹 Organize & Clean:** Select folders, choose strategy, toggle Smart Financial Sort, click **Preview Actions**, and execute.
 2. **🔍 Duplicate Center:** Switch between Exact Hash (SHA-256) and Visual pHash (dHash with threshold slider).
 3. **🏷️ Smart Renamer:** Batch rename files using metadata tokens (`{name}`, `{counter:03d}`, `{date}`, `{camera}`, `{artist}`), casing conversions, and live diff table.
-4. **💾 USB & Backup Sync:** Detects connected USB drives, with incremental copy and snapshot archive modes.
-5. **⏪ Undo & History:** View past organization and renaming sessions and click **Undo Selected Session** for instant rollback.
-6. **⚙️ Rules & Settings:** Inspect and customize supported file extensions and categories.
+4. **📊 Storage Treemap:** Interactive 2D treemap rendering and ranked table of largest space-eating files.
+5. **💾 USB & Backup Sync:** Detects connected USB drives, with incremental copy and snapshot archive modes.
+6. **🛡️ Security & Junk:** Reclaim space by cleaning inactive `node_modules` and scan files for exposed API keys/secrets with quarantine.
+7. **⏪ Undo & History:** View past organization and renaming sessions and click **Undo Selected Session** for instant rollback.
+8. **⚙️ Settings & Shell:** Inspect categories and register the Windows Explorer right-click context menu with one click.
 
 ---
 
 ## ⌨️ Command-Line Interface (CLI) Usage
 
 ### Common Commands:
+
+- **Storage Analysis & Largest Files:**
+  ```bash
+  python main.py --source "C:/Users/Raven" --analyze-disk
+  ```
+
+- **Developer Bloat & Junk Cleaner:**
+  ```bash
+  python main.py --source "D:/Workspaces" --scan-junk
+  python main.py --source "D:/Workspaces" --clean-junk
+  ```
+
+- **Secret Scanner (DLP) & File Quarantine:**
+  ```bash
+  python main.py --source "D:/Projects" --scan-secrets
+  python main.py --source "D:/Projects" --quarantine-secrets
+  ```
+
+- **Windows Explorer Right-Click Menu Integration:**
+  ```bash
+  python main.py --install-context-menu
+  python main.py --uninstall-context-menu
+  ```
 
 - **Smart Bulk Renaming with Metadata & Counter:**
   ```bash
@@ -181,7 +227,7 @@ For a complete reference of flags and options, see [CLI Reference Guide](docs/CL
 
 ## 🧪 Automated Testing
 
-Smart File Organizer includes a comprehensive test suite covering scanner filtering, tiered hashing, perceptual dHash, metadata renaming, USB syncing, smart receipt classification, collision resolution, dry-run simulation, and transaction rollbacks:
+Smart File Organizer includes a comprehensive test suite covering scanner filtering, tiered hashing, perceptual dHash, metadata renaming, USB syncing, smart receipt classification, disk treemap analysis, dev junk cleaner, secret scanning, collision resolution, dry-run simulation, and transaction rollbacks:
 
 ```bash
 python -m pytest -v tests/
@@ -189,39 +235,47 @@ python -m pytest -v tests/
 
 ### Test Results:
 ```text
-tests/test_cli.py::test_cli_help PASSED                                  [  3%]
-tests/test_cli.py::test_cli_dry_run PASSED                               [  6%]
-tests/test_cli.py::test_cli_history_empty PASSED                         [  9%]
-tests/test_config.py::test_default_categories_loaded PASSED              [ 12%]
-tests/test_config.py::test_extension_category_lookup PASSED              [ 16%]
-tests/test_config.py::test_ignore_pattern_matching PASSED                [ 19%]
-tests/test_config.py::test_size_bucket_determination PASSED              [ 22%]
-tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 25%]
-tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 29%]
-tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 32%]
-tests/test_executor.py::test_live_execution_moves_files PASSED           [ 35%]
-tests/test_executor.py::test_collision_auto_rename PASSED                [ 38%]
-tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 41%]
-tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 45%]
-tests/test_organizer.py::test_organize_by_extension PASSED               [ 48%]
-tests/test_organizer.py::test_organize_by_size PASSED                    [ 51%]
-tests/test_renamer.py::test_basic_template_renaming PASSED               [ 54%]
-tests/test_renamer.py::test_case_transformations PASSED                  [ 58%]
-tests/test_renamer.py::test_find_and_replace PASSED                      [ 61%]
-tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 64%]
-tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 67%]
-tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 70%]
-tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 74%]
-tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 77%]
-tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 80%]
-tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 83%]
-tests/test_syncer.py::test_incremental_sync PASSED                       [ 87%]
-tests/test_syncer.py::test_snapshot_sync PASSED                          [ 90%]
-tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 93%]
-tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 96%]
+tests/test_cli.py::test_cli_help PASSED                                  [  2%]
+tests/test_cli.py::test_cli_dry_run PASSED                               [  5%]
+tests/test_cli.py::test_cli_history_empty PASSED                         [  7%]
+tests/test_config.py::test_default_categories_loaded PASSED              [ 10%]
+tests/test_config.py::test_extension_category_lookup PASSED              [ 12%]
+tests/test_config.py::test_ignore_pattern_matching PASSED                [ 15%]
+tests/test_config.py::test_size_bucket_determination PASSED              [ 17%]
+tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 20%]
+tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 23%]
+tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 25%]
+tests/test_executor.py::test_live_execution_moves_files PASSED           [ 28%]
+tests/test_executor.py::test_collision_auto_rename PASSED                [ 30%]
+tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 33%]
+tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 35%]
+tests/test_junk_cleaner.py::test_scan_and_clean_junk_directory PASSED    [ 38%]
+tests/test_organizer.py::test_organize_by_extension PASSED               [ 41%]
+tests/test_organizer.py::test_organize_by_size PASSED                    [ 43%]
+tests/test_renamer.py::test_basic_template_renaming PASSED               [ 46%]
+tests/test_renamer.py::test_case_transformations PASSED                  [ 48%]
+tests/test_renamer.py::test_find_and_replace PASSED                      [ 51%]
+tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 53%]
+tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 56%]
+tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 58%]
+tests/test_secret_scanner.py::test_detect_aws_and_openai_secrets PASSED  [ 61%]
+tests/test_secret_scanner.py::test_quarantine_leaked_file PASSED         [ 64%]
+tests/test_shell_integration.py::test_is_supported_returns_bool PASSED   [ 66%]
+tests/test_shell_integration.py::test_is_installed_query PASSED          [ 69%]
+tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 71%]
+tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 74%]
+tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 76%]
+tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 79%]
+tests/test_syncer.py::test_incremental_sync PASSED                       [ 82%]
+tests/test_syncer.py::test_snapshot_sync PASSED                          [ 84%]
+tests/test_treemap.py::test_disk_tree_analysis PASSED                    [ 87%]
+tests/test_treemap.py::test_treemap_layout_coordinates PASSED            [ 89%]
+tests/test_treemap.py::test_find_largest_files PASSED                    [ 92%]
+tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 94%]
+tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 97%]
 tests/test_visual_hasher.py::test_visual_similarity_clustering PASSED    [100%]
 
-============================= 31 passed in 0.81s ==============================
+============================= 39 passed in 0.68s ==============================
 ```
 
 ---

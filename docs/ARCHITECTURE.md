@@ -7,11 +7,11 @@
 
 ```
 +----------------------------------------------------------------------------------+
-|                            SMART FILE ORGANIZER v2.0                             |
+|                            SMART FILE ORGANIZER v2.2                             |
 +----------------------------------------------------------------------------------+
 |                                  INTERFACES                                      |
 |  smart_file_organizer/gui/                        smart_file_organizer/cli/      |
-|  - app.py (Tkinter Dark UI)                       - parser.py (argparse)         |
+|  - app.py (8-Tab Modern Tkinter Dark UI)          - parser.py (argparse CLI)     |
 |  - components.py (StatCard, Treeview)             - formatter.py (ANSI tables)   |
 |  - theme.py (Modern Slate Theme)                  - app.py (CLI Router)          |
 +----------------------------------------------------------------------------------+
@@ -20,16 +20,24 @@
 +----------------------------------------------------------------------------------+
 |                                CORE ENGINE                                       |
 |  smart_file_organizer/core/                                                      |
-|  ├── scanner.py       -> Fast directory traversal with pattern exclusion         |
-|  ├── hasher.py        -> 3-tiered chunked hasher (Size -> 64KB -> SHA-256)       |
-|  ├── deduplicator.py  -> Duplicate grouping & keep policy selection              |
-|  ├── organizer.py     -> Multi-strategy rule engine (Ext, Date, Size, Regex)     |
-|  ├── executor.py      -> Safe execution, dry-run simulation & collision solver   |
-|  ├── undo_manager.py  -> SQLite & JSON journaling, 100% rollback engine          |
-|  ├── watcher.py       -> Debounced directory daemon                              |
-|  ├── reporter.py      -> HTML Dashboard, Markdown & Console summaries            |
-|  ├── config.py        -> Configuration loader with fallback defaults             |
-|  └── models.py        -> Dataclasses: FileInfo, ActionRecord, SessionLog         |
+|  ├── scanner.py          -> Fast traversal with pattern exclusion (.git, etc.)   |
+|  ├── hasher.py           -> 3-tiered chunked hasher (Size -> 64KB -> SHA-256)    |
+|  ├── visual_hasher.py    -> Perceptual difference hasher (dHash) & similarity   |
+|  ├── deduplicator.py     -> Duplicate grouping (Exact & Visual) & resolution    |
+|  ├── renamer.py          -> Smart Bulk Renamer (EXIF, ID3, Templates, Casing)   |
+|  ├── syncer.py           -> USB detector, incremental sync & snapshot archiver  |
+|  ├── treemap.py          -> Disk usage tree analyzer & 2D treemap layout engine |
+|  ├── junk_cleaner.py     -> Inactive dev bloat cleaner (node_modules, caches)   |
+|  ├── secret_scanner.py   -> DLP secret detector (AWS, OpenAI, GitHub, SSH)      |
+|  ├── shell_integration.py-> Windows Explorer HKCU right-click context menu      |
+|  ├── smart_filter.py     -> PDF text extractor & financial invoice classifier   |
+|  ├── organizer.py        -> Multi-strategy engine (Ext, Date, Size, Receipts)   |
+|  ├── executor.py         -> Safe execution, dry-run simulation & collisions     |
+|  ├── undo_manager.py     -> SQLite & JSON journaling, 100% rollback engine       |
+|  ├── watcher.py          -> Debounced directory daemon & USB auto-sync          |
+|  ├── reporter.py         -> HTML Dashboard, Markdown & Console summaries         |
+|  ├── config.py           -> Configuration loader with fallback defaults          |
+|  └── models.py           -> Dataclasses: FileInfo, ActionRecord, SessionLog      |
 +----------------------------------------------------------------------------------+
 ```
 

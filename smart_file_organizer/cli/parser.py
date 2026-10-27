@@ -161,6 +161,49 @@ Examples:
         help="Detect and list currently connected removable USB drives"
     )
 
+    # Storage Analyzer & Treemap
+    parser.add_argument(
+        "--analyze-disk",
+        action="store_true",
+        help="Analyze directory disk usage and display top storage-eating files"
+    )
+
+    # Developer Junk Sweeper
+    parser.add_argument(
+        "--scan-junk",
+        action="store_true",
+        help="Scan for inactive node_modules, .venv, and build caches"
+    )
+    parser.add_argument(
+        "--clean-junk",
+        action="store_true",
+        help="Clean discovered developer junk and reclaim disk space"
+    )
+
+    # Sensitive Data & Secret Scanner (DLP)
+    parser.add_argument(
+        "--scan-secrets",
+        action="store_true",
+        help="Scan files for exposed API tokens, passwords, and private keys"
+    )
+    parser.add_argument(
+        "--quarantine-secrets",
+        action="store_true",
+        help="Move discovered compromised credential files to _Quarantine/ folder"
+    )
+
+    # Windows Explorer Integration
+    parser.add_argument(
+        "--install-context-menu",
+        action="store_true",
+        help="Register Smart File Organizer in Windows Explorer right-click menu"
+    )
+    parser.add_argument(
+        "--uninstall-context-menu",
+        action="store_true",
+        help="Remove Smart File Organizer from Windows Explorer right-click menu"
+    )
+
     # Undo and history
     parser.add_argument(
         "--undo",

@@ -1,5 +1,5 @@
 """
-Core engine modules for Smart File Organizer.
+Core engine modules for Smart File Organizer (Enterprise Edition v2.2).
 """
 
 from .models import (
@@ -20,6 +20,10 @@ from .renamer import SmartBulkRenamer, EXIFExtractor, ID3Extractor
 from .visual_hasher import PerceptualHasher, VisualSimilarityEngine
 from .syncer import DriveDetector, FolderSynchronizer
 from .smart_filter import ReceiptClassifier
+from .shell_integration import WindowsShellIntegration
+from .treemap import DiskAnalyzer, DiskNode
+from .junk_cleaner import DevJunkCleaner, JunkItem, JunkCategory
+from .secret_scanner import SecretScanner, SecretFinding
 
 __all__ = [
     "FileInfo",
@@ -50,4 +54,12 @@ __all__ = [
     "DriveDetector",
     "FolderSynchronizer",
     "ReceiptClassifier",
+    "WindowsShellIntegration",
+    "DiskAnalyzer",
+    "DiskNode",
+    "DevJunkCleaner",
+    "JunkItem",
+    "JunkCategory",
+    "SecretScanner",
+    "SecretFinding",
 ]

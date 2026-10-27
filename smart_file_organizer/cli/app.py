@@ -21,6 +21,10 @@ from ..core.watcher import DirectoryWatcher
 from ..core.reporter import Reporter
 from ..core.renamer import SmartBulkRenamer
 from ..core.syncer import DriveDetector, FolderSynchronizer
+from ..core.shell_integration import WindowsShellIntegration
+from ..core.treemap import DiskAnalyzer
+from ..core.junk_cleaner import DevJunkCleaner
+from ..core.secret_scanner import SecretScanner
 from ..core.models import OrganizeStrategy, ActionType, SyncProfile, SyncMode
 
 
@@ -92,6 +96,84 @@ def run_cli(args: Optional[List[str]] = None) -> int:
         else:
             print_error(res.get("error", "Sync failed."))
         return 0 if res["success"] else 1
+
+    # 2d. Check for Windows Context Menu actions
+    if parsed_args.install_context_menu:
+        res = WindowsShellIntegration.install()
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    if parsed_args.uninstall_context_menu:
+        res = WindowsShellIntegration.uninstall()
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    # 2e. Check for Disk Storage Analyzer
+    if parsed_args.analyze_disk:
+        target = Path(parsed_args.source or ".").resolve()
+        print_info(f"Analyzing disk usage for: {target}...")
+        root_node = DiskAnalyzer.analyze_directory(target, max_depth=2)
+        print_success(f"Total directory size: {Reporter.format_bytes(root_node.size)}")
+        print_info("\nSubdirectories and files by size:")
+        for child in root_node.children[:12]:
+            t = "[DIR] " if child.is_dir else "[FILE]"
+            pct = (child.size / root_node.size * 100) if root_node.size > 0 else 0
+            print(f"  {t} {child.name:<30} {Reporter.format_bytes(child.size):>10} ({pct:4.1f}%)")
+
+        print_info("\nTop 10 Largest Individual Files:")
+        largest = DiskAnalyzer.find_largest_files(target, limit=10)
+        for item in largest:
+            print(f"  - {item['name']:<35} {Reporter.format_bytes(item['size']):>10}")
+        return 0
+
+    # 2f. Check for Developer Junk Sweeper
+    if parsed_args.scan_junk or parsed_args.clean_junk:
+        target = Path(parsed_args.source or ".").resolve()
+        print_info(f"Scanning for disposable developer bloat in: {target}...")
+        junk_items = DevJunkCleaner.scan_directory(target, inactive_days=14)
+        if not junk_items:
+            print_success("No stale developer junk discovered!")
+            return 0
+
+        total_junk_size = sum(item.size_bytes for item in junk_items)
+        print_warning(f"Found {len(junk_items)} junk directories totaling {Reporter.format_bytes(total_junk_size)}:")
+        for item in junk_items:
+            print(f"  [{item.category}] {item.path.name:<25} ({Reporter.format_bytes(item.size_bytes)})")
+
+        if parsed_args.clean_junk:
+            print_info("Proceeding to clean junk...")
+            clean_res = DevJunkCleaner.clean_junk(junk_items, dry_run=parsed_args.dry_run)
+            print_success(clean_res["message"])
+        else:
+            print_info("To clean these items, re-run with: --clean-junk")
+        return 0
+
+    # 2g. Check for Sensitive Data & Secret Scanner
+    if parsed_args.scan_secrets or parsed_args.quarantine_secrets:
+        target = Path(parsed_args.source or ".").resolve()
+        print_info(f"Scanning files for exposed secrets & API credentials in: {target}...")
+        findings = SecretScanner.scan_directory(target, recursive=parsed_args.recursive)
+        if not findings:
+            print_success("Security scan clean! No exposed secrets detected.")
+            return 0
+
+        print_warning(f"SECURITY ALERT: Found {len(findings)} potential secret leaks:")
+        for f in findings:
+            print(f"  [{f.severity}] {f.secret_type:<25} in {f.file_path.name}:{f.line_number} -> {f.masked_snippet}")
+
+        if parsed_args.quarantine_secrets:
+            print_info("Quarantining compromised files...")
+            q_res = SecretScanner.quarantine_files(findings, target)
+            print_success(q_res["message"])
+        else:
+            print_info("To isolate these files into _Quarantine/, re-run with: --quarantine-secrets")
+        return 0
 
     # 3. Check for Undo command
     if parsed_args.undo:

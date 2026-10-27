@@ -29,6 +29,13 @@ python main.py [OPTIONS]
 | | `--sync-source PATH` | Source directory for backup synchronization | `None` |
 | | `--sync-dest PATH` | Destination directory or USB path for backup | `None` |
 | | `--sync-mode MODE` | Synchronization mode: `incremental`, `mirror`, `snapshot` | `incremental` |
+| | `--analyze-disk` | Analyze storage usage and top space-eating files | `False` |
+| | `--scan-junk` | Scan for disposable developer bloat (`node_modules`, caches) | `False` |
+| | `--clean-junk` | Delete discovered developer junk directories | `False` |
+| | `--scan-secrets` | Scan files for exposed API credentials & private keys | `False` |
+| | `--quarantine-secrets` | Move compromised credential files to `_Quarantine/` | `False` |
+| | `--install-context-menu` | Register right-click context menu in Windows Explorer | `False` |
+| | `--uninstall-context-menu` | Remove right-click context menu from Windows Explorer | `False` |
 | | `--undo [ID]` | Rollback session (`latest` if ID is omitted) | `None` |
 | | `--history` | List all previous organization sessions | `False` |
 | `-w` | `--watch` | Run background watcher daemon with debounce | `False` |
@@ -78,7 +85,40 @@ python main.py --sync-source "D:/SaveGames" --sync-dest "E:/Backups" --sync-mode
 python main.py --source "C:/Users/Raven/Downloads" --dry-run
 ```
 
-### 6. Undo Previous Operation (100% Rollback)
+### 6. Storage Analysis & Largest Files
+```bash
+# Analyze disk usage distribution and find top storage-eating files:
+python main.py --source "C:/Users/Raven" --analyze-disk
+```
+
+### 7. Developer Junk Cleaner
+```bash
+# Scan for inactive node_modules, .venv, and build caches:
+python main.py --source "D:/Workspaces" --scan-junk
+
+# Permanently delete discovered junk directories:
+python main.py --source "D:/Workspaces" --clean-junk
+```
+
+### 8. Secret Scanner (DLP) & File Quarantine
+```bash
+# Scan directory for exposed API keys, private keys, and connection strings:
+python main.py --source "D:/Projects" --scan-secrets
+
+# Quarantine compromised files into _Quarantine/ folder:
+python main.py --source "D:/Projects" --quarantine-secrets
+```
+
+### 9. Windows Explorer Shell Integration
+```bash
+# Register right-click context menu under HKCU (no Admin required):
+python main.py --install-context-menu
+
+# Unregister right-click context menu:
+python main.py --uninstall-context-menu
+```
+
+### 10. Undo Previous Operation (100% Rollback)
 ```bash
 python main.py --undo
 ```

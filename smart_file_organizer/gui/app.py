@@ -21,6 +21,10 @@ from ..core.undo_manager import UndoManager
 from ..core.reporter import Reporter
 from ..core.renamer import SmartBulkRenamer
 from ..core.syncer import DriveDetector, FolderSynchronizer
+from ..core.shell_integration import WindowsShellIntegration
+from ..core.treemap import DiskAnalyzer, DiskNode
+from ..core.junk_cleaner import DevJunkCleaner, JunkItem
+from ..core.secret_scanner import SecretScanner, SecretFinding
 from ..core.models import (
     OrganizeStrategy, ActionRecord, DuplicateGroup,
     VisualDuplicateGroup, SyncProfile, SyncMode
@@ -32,7 +36,7 @@ class SmartFileOrganizerApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Smart File Organizer v2.1 - Enterprise Edition")
+        self.title("Smart File Organizer v2.2 - Enterprise Edition")
         self.geometry("1100x740")
         self.minsize(900, 600)
 
@@ -78,21 +82,27 @@ class SmartFileOrganizerApp(tk.Tk):
         self.tab_organize = ttk.Frame(self.notebook, padding=14)
         self.tab_dedupe = ttk.Frame(self.notebook, padding=14)
         self.tab_renamer = ttk.Frame(self.notebook, padding=14)
+        self.tab_storage = ttk.Frame(self.notebook, padding=14)
         self.tab_sync = ttk.Frame(self.notebook, padding=14)
+        self.tab_security = ttk.Frame(self.notebook, padding=14)
         self.tab_history = ttk.Frame(self.notebook, padding=14)
         self.tab_settings = ttk.Frame(self.notebook, padding=14)
 
-        self.notebook.add(self.tab_organize, text="  🧹 Organize & Clean  ")
+        self.notebook.add(self.tab_organize, text="  🧹 Organize  ")
         self.notebook.add(self.tab_dedupe, text="  🔍 Duplicate Center  ")
         self.notebook.add(self.tab_renamer, text="  🏷️ Smart Renamer  ")
+        self.notebook.add(self.tab_storage, text="  📊 Storage Treemap  ")
         self.notebook.add(self.tab_sync, text="  💾 USB & Backup Sync  ")
+        self.notebook.add(self.tab_security, text="  🛡️ Security & Junk  ")
         self.notebook.add(self.tab_history, text="  ⏪ Undo & History  ")
-        self.notebook.add(self.tab_settings, text="  ⚙️ Rules & Settings  ")
+        self.notebook.add(self.tab_settings, text="  ⚙️ Settings & Shell  ")
 
         self._build_organize_tab()
         self._build_dedupe_tab()
         self._build_renamer_tab()
+        self._build_storage_tab()
         self._build_sync_tab()
+        self._build_security_tab()
         self._build_history_tab()
         self._build_settings_tab()
 
@@ -538,8 +548,227 @@ class SmartFileOrganizerApp(tk.Tk):
         messagebox.showinfo("Rename Complete", f"Successfully renamed {session.moved_count} files! (Undoable anytime)")
 
     # -------------------------------------------------------------
-    # TAB 4: USB & Backup Sync
+    # TAB 4: Storage & Treemap
     # -------------------------------------------------------------
+    def _build_storage_tab(self) -> None:
+        panel = ttk.Frame(self.tab_storage, style="Card.TFrame", padding=14)
+        panel.pack(fill="x", pady=(0, 10))
+
+        self.storage_picker = FolderPicker(panel, label="Analyze Folder: ", default_path=str(Path.home() / "Downloads"))
+        self.storage_picker.pack(fill="x", pady=(0, 6))
+
+        row = ttk.Frame(panel, style="Card.TFrame")
+        row.pack(fill="x")
+
+        self.storage_status_lbl = ttk.Label(row, text="Click 'Analyze Storage' to compute space distribution.", style="Muted.TLabel")
+        self.storage_status_lbl.pack(side="left")
+
+        btn_analyze = ttk.Button(row, text="📊 Analyze Storage", style="Primary.TButton", command=self._on_analyze_storage)
+        btn_analyze.pack(side="right")
+
+        # Split pane: Left Canvas, Right Top Files
+        split_frame = ttk.Frame(self.tab_storage)
+        split_frame.pack(fill="both", expand=True)
+        split_frame.columnconfigure(0, weight=3)
+        split_frame.columnconfigure(1, weight=2)
+        split_frame.rowconfigure(0, weight=1)
+
+        # Treemap Canvas
+        canvas_card = ttk.Frame(split_frame, style="Card.TFrame", padding=8)
+        canvas_card.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+
+        ttk.Label(canvas_card, text="Storage Treemap Distribution", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
+        self.treemap_canvas = tk.Canvas(canvas_card, bg="#131d31", highlightthickness=0)
+        self.treemap_canvas.pack(fill="both", expand=True)
+
+        # Largest Files table
+        table_card = ttk.Frame(split_frame, style="Card.TFrame", padding=8)
+        table_card.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+
+        ttk.Label(table_card, text="Top Storage-Eating Files", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
+        cols = ["name", "size"]
+        heads = ["File Name", "Size"]
+        self.largest_table = ScrollableTreeview(table_card, cols, heads)
+        self.largest_table.pack(fill="both", expand=True)
+
+    def _on_analyze_storage(self) -> None:
+        target = Path(self.storage_picker.get_path())
+        if not target.exists():
+            messagebox.showerror("Error", f"Folder does not exist:\n{target}")
+            return
+
+        self.status_var.set("Analyzing disk storage...")
+        self.update_idletasks()
+
+        root_node = DiskAnalyzer.analyze_directory(target, max_depth=2)
+        largest = DiskAnalyzer.find_largest_files(target, limit=15)
+
+        self.storage_status_lbl.config(text=f"Total Storage: {Reporter.format_bytes(root_node.size)} ({len(root_node.children)} direct subfolders/files)")
+
+        # Render Largest files
+        self.largest_table.clear()
+        for f in largest:
+            self.largest_table.insert_row([f["name"], Reporter.format_bytes(f["size"])])
+
+        # Draw Treemap on Canvas
+        self.treemap_canvas.delete("all")
+        cw = self.treemap_canvas.winfo_width() or 450
+        ch = self.treemap_canvas.winfo_height() or 300
+
+        DiskAnalyzer.layout_treemap(root_node, x1=10, y1=10, x2=cw - 10, y2=ch - 10)
+
+        for child in root_node.children:
+            x1, y1, x2, y2 = child.rect
+            if x2 - x1 > 2 and y2 - y1 > 2:
+                self.treemap_canvas.create_rectangle(
+                    x1, y1, x2, y2,
+                    fill=child.color,
+                    outline="#0f172a",
+                    width=2
+                )
+                if (x2 - x1) > 40 and (y2 - y1) > 20:
+                    text_label = f"{child.name[:12]}\n{Reporter.format_bytes(child.size)}"
+                    self.treemap_canvas.create_text(
+                        (x1 + x2) / 2, (y1 + y2) / 2,
+                        text=text_label,
+                        fill="#000000",
+                        font=(Theme.FONT_FAMILY, 8, "bold")
+                    )
+
+        self.status_var.set(f"Storage analysis complete: {Reporter.format_bytes(root_node.size)}.")
+
+    # -------------------------------------------------------------
+    # TAB 5: Security & Dev Junk
+    # -------------------------------------------------------------
+    def _build_security_tab(self) -> None:
+        notebook_sec = ttk.Notebook(self.tab_security)
+        notebook_sec.pack(fill="both", expand=True)
+
+        tab_junk = ttk.Frame(notebook_sec, padding=10)
+        tab_secrets = ttk.Frame(notebook_sec, padding=10)
+
+        notebook_sec.add(tab_junk, text="  🧹 Dev Junk Cleaner  ")
+        notebook_sec.add(tab_secrets, text="  🛡️ Secret Scanner (DLP)  ")
+
+        # --- JUNK PANEL ---
+        panel_j = ttk.Frame(tab_junk, style="Card.TFrame", padding=12)
+        panel_j.pack(fill="x", pady=(0, 8))
+
+        self.junk_picker = FolderPicker(panel_j, label="Scan Folder: ", default_path=str(Path.home() / "Documents"))
+        self.junk_picker.pack(fill="x", pady=(0, 6))
+
+        row_j = ttk.Frame(panel_j, style="Card.TFrame")
+        row_j.pack(fill="x")
+
+        self.junk_status_var = tk.StringVar(value="Scan for node_modules, .venv, and build caches.")
+        ttk.Label(row_j, textvariable=self.junk_status_var, style="Muted.TLabel").pack(side="left")
+
+        btn_scan_j = ttk.Button(row_j, text="🔍 Scan Junk", style="Secondary.TButton", command=self._on_scan_junk)
+        btn_scan_j.pack(side="right", padx=(6, 0))
+
+        btn_clean_j = ttk.Button(row_j, text="🗑️ Clean Discovered Junk", style="Danger.TButton", command=self._on_clean_junk)
+        btn_clean_j.pack(side="right")
+
+        cols_j = ["category", "name", "size", "path"]
+        heads_j = ["Category", "Artifact Name", "Size", "Folder Path"]
+        self.junk_table = ScrollableTreeview(tab_junk, cols_j, heads_j)
+        self.junk_table.pack(fill="both", expand=True)
+        self.discovered_junk: List[JunkItem] = []
+
+        # --- SECRETS PANEL ---
+        panel_s = ttk.Frame(tab_secrets, style="Card.TFrame", padding=12)
+        panel_s.pack(fill="x", pady=(0, 8))
+
+        self.secret_picker = FolderPicker(panel_s, label="Scan Folder: ", default_path=str(Path.home() / "Documents"))
+        self.secret_picker.pack(fill="x", pady=(0, 6))
+
+        row_s = ttk.Frame(panel_s, style="Card.TFrame")
+        row_s.pack(fill="x")
+
+        self.secret_status_var = tk.StringVar(value="Scan for exposed API keys, tokens, and SSH private keys.")
+        ttk.Label(row_s, textvariable=self.secret_status_var, style="Muted.TLabel").pack(side="left")
+
+        btn_scan_s = ttk.Button(row_s, text="🔍 Scan Secrets", style="Secondary.TButton", command=self._on_scan_secrets)
+        btn_scan_s.pack(side="right", padx=(6, 0))
+
+        btn_quarantine = ttk.Button(row_s, text="🛡️ Quarantine Compromised Files", style="Warning.TButton", command=self._on_quarantine_secrets)
+        btn_quarantine.pack(side="right")
+
+        cols_s = ["severity", "type", "file", "line", "snippet"]
+        heads_s = ["Severity", "Secret Type", "File Name", "Line", "Masked Snippet"]
+        self.secret_table = ScrollableTreeview(tab_secrets, cols_s, heads_s)
+        self.secret_table.pack(fill="both", expand=True)
+        self.discovered_secrets: List[SecretFinding] = []
+
+    def _on_scan_junk(self) -> None:
+        target = Path(self.junk_picker.get_path())
+        if not target.exists():
+            messagebox.showerror("Error", f"Folder does not exist:\n{target}")
+            return
+
+        self.status_var.set("Scanning for developer junk...")
+        self.update_idletasks()
+
+        self.discovered_junk = DevJunkCleaner.scan_directory(target, inactive_days=14)
+        total_size = sum(item.size_bytes for item in self.discovered_junk)
+
+        self.junk_table.clear()
+        for item in self.discovered_junk:
+            self.junk_table.insert_row([item.category, item.name, Reporter.format_bytes(item.size_bytes), str(item.path)])
+
+        self.junk_status_var.set(f"Found {len(self.discovered_junk)} junk items ({Reporter.format_bytes(total_size)} reclaimable).")
+        self.status_var.set(f"Discovered {len(self.discovered_junk)} junk items.")
+
+    def _on_clean_junk(self) -> None:
+        if not self.discovered_junk:
+            messagebox.showinfo("Notice", "No junk items discovered. Run 'Scan Junk' first.")
+            return
+
+        confirm = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to permanently delete {len(self.discovered_junk)} junk folders?"
+        )
+        if not confirm:
+            return
+
+        res = DevJunkCleaner.clean_junk(self.discovered_junk, dry_run=False)
+        self._on_scan_junk()
+        messagebox.showinfo("Cleanup Finished", res["message"])
+
+    def _on_scan_secrets(self) -> None:
+        target = Path(self.secret_picker.get_path())
+        if not target.exists():
+            messagebox.showerror("Error", f"Folder does not exist:\n{target}")
+            return
+
+        self.status_var.set("Scanning for sensitive credentials...")
+        self.update_idletasks()
+
+        self.discovered_secrets = SecretScanner.scan_directory(target, recursive=True)
+        self.secret_table.clear()
+        for f in self.discovered_secrets:
+            self.secret_table.insert_row([f.severity, f.secret_type, f.file_path.name, str(f.line_number), f.masked_snippet])
+
+        if not self.discovered_secrets:
+            self.secret_status_var.set("Clean! No exposed secrets detected.")
+            messagebox.showinfo("Clean Scan", "No sensitive tokens or secrets were found.")
+        else:
+            self.secret_status_var.set(f"ALERT: Found {len(self.discovered_secrets)} exposed secrets!")
+            messagebox.showwarning("Security Alert", f"Detected {len(self.discovered_secrets)} sensitive credentials!")
+
+    def _on_quarantine_secrets(self) -> None:
+        if not self.discovered_secrets:
+            messagebox.showinfo("Notice", "No secret leaks to quarantine.")
+            return
+
+        target = Path(self.secret_picker.get_path())
+        confirm = messagebox.askyesno("Confirm Quarantine", f"Move {len(self.discovered_secrets)} files into '_Quarantine' folder?")
+        if not confirm:
+            return
+
+        res = SecretScanner.quarantine_files(self.discovered_secrets, target)
+        self._on_scan_secrets()
+        messagebox.showinfo("Quarantine Finished", res["message"])
     def _build_sync_tab(self) -> None:
         panel = ttk.Frame(self.tab_sync, style="Card.TFrame", padding=14)
         panel.pack(fill="x", pady=(0, 10))
@@ -681,9 +910,34 @@ class SmartFileOrganizerApp(tk.Tk):
             messagebox.showerror("Rollback Error", res["message"])
 
     # -------------------------------------------------------------
-    # TAB 6: Rules & Settings
+    # TAB 8: Rules & Settings
     # -------------------------------------------------------------
     def _build_settings_tab(self) -> None:
+        # Shell Integration Card
+        shell_card = ttk.Frame(self.tab_settings, style="Card.TFrame", padding=16)
+        shell_card.pack(fill="x", pady=(0, 14))
+
+        ttk.Label(shell_card, text="Windows Explorer Context Menu Integration", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(
+            shell_card,
+            text="Adds right-click shortcuts ('Smart Organize Here', 'Find Duplicates Here', 'Open in GUI') directly into Windows Explorer.",
+            style="Muted.TLabel"
+        ).pack(anchor="w", pady=(0, 8))
+
+        row_shell = ttk.Frame(shell_card, style="Card.TFrame")
+        row_shell.pack(fill="x")
+
+        self.shell_status_var = tk.StringVar()
+        self._update_shell_status()
+
+        ttk.Label(row_shell, textvariable=self.shell_status_var, style="Card.TLabel", font=(Theme.FONT_FAMILY, 9, "bold")).pack(side="left")
+
+        btn_uninstall_shell = ttk.Button(row_shell, text="❌ Remove Context Menu", style="Danger.TButton", command=self._on_uninstall_shell)
+        btn_uninstall_shell.pack(side="right", padx=(8, 0))
+
+        btn_install_shell = ttk.Button(row_shell, text="✨ Register Context Menu", style="Primary.TButton", command=self._on_install_shell)
+        btn_install_shell.pack(side="right")
+
         info_card = ttk.Frame(self.tab_settings, style="Card.TFrame", padding=16)
         info_card.pack(fill="x", pady=(0, 14))
 
@@ -702,6 +956,30 @@ class SmartFileOrganizerApp(tk.Tk):
 
         for cat, exts in self.config_manager.categories.items():
             self.settings_table.insert_row([cat, ", ".join(exts)])
+
+    def _update_shell_status(self) -> None:
+        if not WindowsShellIntegration.is_supported():
+            self.shell_status_var.set("Shell integration: Windows only.")
+        elif WindowsShellIntegration.is_installed():
+            self.shell_status_var.set("✅ Status: Context menu is registered in Windows Explorer.")
+        else:
+            self.shell_status_var.set("⚪ Status: Context menu is not registered.")
+
+    def _on_install_shell(self) -> None:
+        res = WindowsShellIntegration.install()
+        self._update_shell_status()
+        if res["success"]:
+            messagebox.showinfo("Success", res["message"])
+        else:
+            messagebox.showerror("Error", res["message"])
+
+    def _on_uninstall_shell(self) -> None:
+        res = WindowsShellIntegration.uninstall()
+        self._update_shell_status()
+        if res["success"]:
+            messagebox.showinfo("Success", res["message"])
+        else:
+            messagebox.showerror("Error", res["message"])
 
 
 def launch_gui() -> None:
