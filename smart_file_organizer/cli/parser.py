@@ -204,6 +204,68 @@ Examples:
         help="Remove Smart File Organizer from Windows Explorer right-click menu"
     )
 
+    # Cold Storage & Auto-Archive
+    parser.add_argument(
+        "--archive-cold",
+        action="store_true",
+        help="Compress cold/inactive files into a ZIP archive"
+    )
+    parser.add_argument(
+        "--archive-days",
+        type=int,
+        default=90,
+        help="Inactivity threshold in days for cold storage (default: 90)"
+    )
+    parser.add_argument(
+        "--archive-dest",
+        type=str,
+        default=None,
+        help="Destination path for cold storage archive ZIP"
+    )
+    parser.add_argument(
+        "--archive-delete-sources",
+        action="store_true",
+        help="Delete original files after successful archive compression"
+    )
+    parser.add_argument(
+        "--restore-archive",
+        type=str,
+        default=None,
+        help="Restore/extract a previously created SFO archive ZIP"
+    )
+
+    # Cloud Storage Connector
+    parser.add_argument(
+        "--detect-cloud",
+        action="store_true",
+        help="Detect and list installed cloud storage folders (OneDrive, Google Drive, Dropbox, iCloud)"
+    )
+    parser.add_argument(
+        "--sync-cloud",
+        type=str,
+        default=None,
+        help="Sync source directory to a detected cloud provider (e.g. 'OneDrive', 'Google Drive', 'Dropbox')"
+    )
+
+    # Cross-Device LAN Share (LAN Drop)
+    parser.add_argument(
+        "--lan-share",
+        action="store_true",
+        help="Launch background LAN Drop server for wireless file exchange across phones and PCs"
+    )
+    parser.add_argument(
+        "--lan-port",
+        type=int,
+        default=8080,
+        help="Port number for LAN Drop server (default: 8080)"
+    )
+    parser.add_argument(
+        "--lan-pin",
+        type=str,
+        default=None,
+        help="Optional access PIN for LAN Drop server"
+    )
+
     # Undo and history
     parser.add_argument(
         "--undo",

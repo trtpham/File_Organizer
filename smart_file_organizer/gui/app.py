@@ -5,6 +5,7 @@ Tabs: Organize & Clean, Duplicate Center (Hash + pHash), Smart Bulk Renamer,
 """
 
 import sys
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
@@ -25,9 +26,12 @@ from ..core.shell_integration import WindowsShellIntegration
 from ..core.treemap import DiskAnalyzer, DiskNode
 from ..core.junk_cleaner import DevJunkCleaner, JunkItem
 from ..core.secret_scanner import SecretScanner, SecretFinding
+from ..core.archiver import ColdStorageAnalyzer, ColdStorageArchiver
+from ..core.cloud_connector import CloudDetector, CloudProvider, CloudSyncManager
+from ..core.lan_share import LANShareServer, get_local_ip
 from ..core.models import (
     OrganizeStrategy, ActionRecord, DuplicateGroup,
-    VisualDuplicateGroup, SyncProfile, SyncMode
+    VisualDuplicateGroup, SyncProfile, SyncMode, FileInfo
 )
 
 
@@ -36,7 +40,7 @@ class SmartFileOrganizerApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Smart File Organizer v2.2 - Enterprise Edition")
+        self.title("Smart File Organizer v2.3 - Enterprise Edition")
         self.geometry("1100x740")
         self.minsize(900, 600)
 
@@ -47,6 +51,8 @@ class SmartFileOrganizerApp(tk.Tk):
         self.deduplicator = Deduplicator(self.config_manager)
         self.executor = TransactionExecutor(self.config_manager)
         self.renamer = SmartBulkRenamer()
+        self.lan_server: Optional[LANShareServer] = None
+        self.cold_files: List[FileInfo] = []
 
         self.planned_records: List[ActionRecord] = []
         self.found_duplicates: List[DuplicateGroup] = []
@@ -57,6 +63,12 @@ class SmartFileOrganizerApp(tk.Tk):
         self._build_ui()
         self._load_history_tab()
         self._refresh_usb_drives()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self) -> None:
+        if self.lan_server and self.lan_server.is_running():
+            self.lan_server.stop()
+        self.destroy()
 
     def _build_ui(self) -> None:
         """Constructs application layout."""
@@ -69,7 +81,7 @@ class SmartFileOrganizerApp(tk.Tk):
 
         sub_lbl = ttk.Label(
             header_frame,
-            text="Clean Architecture • Visual pHash • EXIF/ID3 Renamer • Auto-Sync • 100% Rollback",
+            text="Clean Architecture • Visual pHash • Renamer • Treemap • Cloud Sync • LAN Drop • 100% Rollback",
             style="Muted.TLabel"
         )
         sub_lbl.pack(side="left", padx=(16, 0), pady=(4, 0))
@@ -92,7 +104,7 @@ class SmartFileOrganizerApp(tk.Tk):
         self.notebook.add(self.tab_dedupe, text="  🔍 Duplicate Center  ")
         self.notebook.add(self.tab_renamer, text="  🏷️ Smart Renamer  ")
         self.notebook.add(self.tab_storage, text="  📊 Storage Treemap  ")
-        self.notebook.add(self.tab_sync, text="  💾 USB & Backup Sync  ")
+        self.notebook.add(self.tab_sync, text="  💾 Sync, Cloud & LAN  ")
         self.notebook.add(self.tab_security, text="  🛡️ Security & Junk  ")
         self.notebook.add(self.tab_history, text="  ⏪ Undo & History  ")
         self.notebook.add(self.tab_settings, text="  ⚙️ Settings & Shell  ")
@@ -770,10 +782,29 @@ class SmartFileOrganizerApp(tk.Tk):
         self._on_scan_secrets()
         messagebox.showinfo("Quarantine Finished", res["message"])
     def _build_sync_tab(self) -> None:
-        panel = ttk.Frame(self.tab_sync, style="Card.TFrame", padding=14)
+        notebook_sync = ttk.Notebook(self.tab_sync)
+        notebook_sync.pack(fill="both", expand=True)
+
+        tab_usb = ttk.Frame(notebook_sync, padding=10)
+        tab_cloud = ttk.Frame(notebook_sync, padding=10)
+        tab_lan = ttk.Frame(notebook_sync, padding=10)
+        tab_cold = ttk.Frame(notebook_sync, padding=10)
+
+        notebook_sync.add(tab_usb, text="  🔌 USB Drive Backup  ")
+        notebook_sync.add(tab_cloud, text="  ☁️ Cloud Storage Sync  ")
+        notebook_sync.add(tab_lan, text="  📡 Cross-Device LAN Drop  ")
+        notebook_sync.add(tab_cold, text="  🗄️ Cold Storage Archive  ")
+
+        self._build_usb_subtab(tab_usb)
+        self._build_cloud_subtab(tab_cloud)
+        self._build_lan_subtab(tab_lan)
+        self._build_cold_subtab(tab_cold)
+
+    # --- SUB-TAB 1: USB BACKUP ---
+    def _build_usb_subtab(self, parent: ttk.Frame) -> None:
+        panel = ttk.Frame(parent, style="Card.TFrame", padding=14)
         panel.pack(fill="x", pady=(0, 10))
 
-        # USB Banner
         usb_bar = ttk.Frame(panel, style="Card.TFrame")
         usb_bar.pack(fill="x", pady=(0, 8))
 
@@ -803,13 +834,262 @@ class SmartFileOrganizerApp(tk.Tk):
         )
         mode_combo.pack(side="left", padx=(0, 16))
 
-        btn_sync = ttk.Button(row, text="💾 Sync Now", style="Primary.TButton", command=self._on_execute_sync)
+        btn_sync = ttk.Button(row, text="💾 Sync to USB", style="Primary.TButton", command=self._on_execute_sync)
         btn_sync.pack(side="right")
 
-        # Log Text Box
-        ttk.Label(self.tab_sync, text="Synchronization Activity Log", style="Header.TLabel").pack(anchor="w", pady=(6, 4))
-        self.sync_log_text = tk.Text(self.tab_sync, bg=Theme.CARD_BG, fg=Theme.TEXT_LIGHT, font=Theme.FONT_MONO, height=12)
+        ttk.Label(parent, text="USB Synchronization Log", style="Header.TLabel").pack(anchor="w", pady=(6, 4))
+        self.sync_log_text = tk.Text(parent, bg=Theme.CARD_BG, fg=Theme.TEXT_LIGHT, font=Theme.FONT_MONO, height=10)
         self.sync_log_text.pack(fill="both", expand=True)
+
+    # --- SUB-TAB 2: CLOUD SYNC ---
+    def _build_cloud_subtab(self, parent: ttk.Frame) -> None:
+        panel = ttk.Frame(parent, style="Card.TFrame", padding=14)
+        panel.pack(fill="x", pady=(0, 10))
+
+        row_top = ttk.Frame(panel, style="Card.TFrame")
+        row_top.pack(fill="x", pady=(0, 8))
+
+        ttk.Label(row_top, text="Cloud Provider:", style="Card.TLabel").pack(side="left", padx=(0, 8))
+        self.cloud_provider_var = tk.StringVar()
+        self.cloud_combo = ttk.Combobox(row_top, textvariable=self.cloud_provider_var, state="readonly", width=36)
+        self.cloud_combo.pack(side="left", padx=(0, 12))
+
+        btn_refresh_cloud = ttk.Button(row_top, text="🔄 Detect Cloud Folders", style="Secondary.TButton", command=self._refresh_cloud_providers)
+        btn_refresh_cloud.pack(side="left")
+
+        self.cloud_source_picker = FolderPicker(panel, label="Source Folder:    ", default_path=str(Path.home() / "Documents"))
+        self.cloud_source_picker.pack(fill="x", pady=(0, 6))
+
+        row_bot = ttk.Frame(panel, style="Card.TFrame")
+        row_bot.pack(fill="x", pady=(4, 0))
+
+        ttk.Label(row_bot, text="Cloud Subfolder:", style="Card.TLabel").pack(side="left", padx=(0, 6))
+        self.cloud_subfolder_var = tk.StringVar(value="SFO_Cloud_Sync")
+        entry_sub = ttk.Entry(row_bot, textvariable=self.cloud_subfolder_var, width=18)
+        entry_sub.pack(side="left", padx=(0, 16))
+
+        btn_cloud_sync = ttk.Button(row_bot, text="☁️ Sync to Cloud", style="Primary.TButton", command=self._on_execute_cloud_sync)
+        btn_cloud_sync.pack(side="right")
+
+        ttk.Label(parent, text="Cloud Synchronization Activity Log", style="Header.TLabel").pack(anchor="w", pady=(6, 4))
+        self.cloud_log_text = tk.Text(parent, bg=Theme.CARD_BG, fg=Theme.TEXT_LIGHT, font=Theme.FONT_MONO, height=10)
+        self.cloud_log_text.pack(fill="both", expand=True)
+
+        self._refresh_cloud_providers()
+
+    def _refresh_cloud_providers(self) -> None:
+        self.detected_clouds = CloudDetector.detect_all()
+        if not self.detected_clouds:
+            self.cloud_combo["values"] = ["No active cloud folders found"]
+            self.cloud_combo.current(0)
+        else:
+            names = [f"{c.name} ({c.local_path})" for c in self.detected_clouds]
+            self.cloud_combo["values"] = names
+            self.cloud_combo.current(0)
+
+    def _on_execute_cloud_sync(self) -> None:
+        if not hasattr(self, "detected_clouds") or not self.detected_clouds:
+            messagebox.showwarning("Notice", "No cloud storage provider detected.")
+            return
+
+        idx = self.cloud_combo.current()
+        if idx < 0 or idx >= len(self.detected_clouds):
+            messagebox.showwarning("Notice", "Please select a valid cloud provider.")
+            return
+
+        provider = self.detected_clouds[idx]
+        src = Path(self.cloud_source_picker.get_path())
+        if not src.exists():
+            messagebox.showerror("Error", f"Source folder not found:\n{src}")
+            return
+
+        subfolder = self.cloud_subfolder_var.get().strip() or "SFO_Cloud_Sync"
+        self.cloud_log_text.insert("end", f"\n[*] Syncing {src} -> {provider.name} ({provider.local_path / subfolder})\n")
+        self.update_idletasks()
+
+        res = CloudSyncManager.sync_to_cloud(src, provider, subfolder_name=subfolder, dry_run=False)
+        self.cloud_log_text.insert("end", f"[+] {res['message']}\n")
+        if res.get("errors"):
+            for err in res["errors"]:
+                self.cloud_log_text.insert("end", f"[!] Error: {err}\n")
+        self.cloud_log_text.see("end")
+        messagebox.showinfo("Cloud Sync Finished", res["message"])
+
+    # --- SUB-TAB 3: LAN DROP ---
+    def _build_lan_subtab(self, parent: ttk.Frame) -> None:
+        panel = ttk.Frame(parent, style="Card.TFrame", padding=14)
+        panel.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(panel, text="Wireless Cross-Device LAN Drop", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(
+            panel,
+            text="Share files wirelessly with smartphones, tablets, and laptops on the same Wi-Fi.\n"
+                 "Phones can download files from this PC and upload photos/documents directly into SFO_Incoming/.",
+            style="Muted.TLabel"
+        ).pack(anchor="w", pady=(0, 10))
+
+        self.lan_folder_picker = FolderPicker(panel, label="Folder to Share: ", default_path=str(Path.home() / "Downloads"))
+        self.lan_folder_picker.pack(fill="x", pady=(0, 8))
+
+        row_cfg = ttk.Frame(panel, style="Card.TFrame")
+        row_cfg.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(row_cfg, text="Port:", style="Card.TLabel").pack(side="left", padx=(0, 4))
+        self.lan_port_var = tk.StringVar(value="8080")
+        entry_port = ttk.Entry(row_cfg, textvariable=self.lan_port_var, width=6)
+        entry_port.pack(side="left", padx=(0, 16))
+
+        ttk.Label(row_cfg, text="PIN (Optional):", style="Card.TLabel").pack(side="left", padx=(0, 4))
+        self.lan_pin_var = tk.StringVar(value="")
+        entry_pin = ttk.Entry(row_cfg, textvariable=self.lan_pin_var, width=8)
+        entry_pin.pack(side="left", padx=(0, 16))
+
+        self.btn_lan_toggle = ttk.Button(row_cfg, text="🚀 Start LAN Drop Server", style="Primary.TButton", command=self._on_toggle_lan_server)
+        self.btn_lan_toggle.pack(side="right", padx=(8, 0))
+
+        self.btn_lan_browse = ttk.Button(row_cfg, text="🌐 Open in Browser", style="Secondary.TButton", command=self._on_open_lan_browser, state="disabled")
+        self.btn_lan_browse.pack(side="right")
+
+        # Status Card
+        status_box = ttk.Frame(parent, style="Card.TFrame", padding=16)
+        status_box.pack(fill="both", expand=True)
+
+        self.lan_status_lbl = ttk.Label(status_box, text="Status: Server is OFFLINE", style="Title.TLabel", font=(Theme.FONT_FAMILY, 11, "bold"))
+        self.lan_status_lbl.pack(anchor="w", pady=(0, 6))
+
+        self.lan_url_lbl = ttk.Label(status_box, text="Start server to generate access URL for mobile devices.", style="Muted.TLabel")
+        self.lan_url_lbl.pack(anchor="w")
+
+    def _on_toggle_lan_server(self) -> None:
+        if self.lan_server and self.lan_server.is_running():
+            res = self.lan_server.stop()
+            self.btn_lan_toggle.config(text="🚀 Start LAN Drop Server", style="Primary.TButton")
+            self.btn_lan_browse.config(state="disabled")
+            self.lan_status_lbl.config(text="Status: Server is OFFLINE")
+            self.lan_url_lbl.config(text="Start server to generate access URL for mobile devices.")
+            messagebox.showinfo("LAN Drop", res["message"])
+        else:
+            shared_p = Path(self.lan_folder_picker.get_path())
+            if not shared_p.exists():
+                messagebox.showerror("Error", f"Folder does not exist:\n{shared_p}")
+                return
+
+            try:
+                port = int(self.lan_port_var.get().strip())
+            except ValueError:
+                port = 8080
+
+            pin = self.lan_pin_var.get().strip() or None
+            self.lan_server = LANShareServer(shared_dir=shared_p, port=port, pin=pin)
+            res = self.lan_server.start()
+
+            if res["success"]:
+                self.btn_lan_toggle.config(text="🛑 Stop LAN Server", style="Danger.TButton")
+                self.btn_lan_browse.config(state="normal")
+                pin_msg = f" | PIN: {pin}" if pin else " | No PIN required"
+                self.lan_status_lbl.config(text="Status: ONLINE - Open in phone's browser:")
+                self.lan_url_lbl.config(text=f"👉 {res['url']}{pin_msg}")
+                messagebox.showinfo("LAN Drop Online", f"Server running at:\n{res['url']}\n\nOpen this link on any phone or laptop on your Wi-Fi!")
+            else:
+                messagebox.showerror("Error", res["message"])
+
+    def _on_open_lan_browser(self) -> None:
+        if self.lan_server and self.lan_server.is_running():
+            webbrowser.open(self.lan_server.get_url())
+
+    # --- SUB-TAB 4: COLD STORAGE ARCHIVE ---
+    def _build_cold_subtab(self, parent: ttk.Frame) -> None:
+        panel = ttk.Frame(parent, style="Card.TFrame", padding=14)
+        panel.pack(fill="x", pady=(0, 10))
+
+        self.cold_picker = FolderPicker(panel, label="Scan Folder:       ", default_path=str(Path.home() / "Downloads"))
+        self.cold_picker.pack(fill="x", pady=(0, 6))
+
+        row = ttk.Frame(panel, style="Card.TFrame")
+        row.pack(fill="x", pady=(4, 0))
+
+        ttk.Label(row, text="Inactive for >=", style="Card.TLabel").pack(side="left", padx=(0, 4))
+        self.cold_days_var = tk.StringVar(value="90")
+        entry_days = ttk.Entry(row, textvariable=self.cold_days_var, width=5)
+        entry_days.pack(side="left", padx=(0, 4))
+        ttk.Label(row, text="days", style="Card.TLabel").pack(side="left", padx=(0, 16))
+
+        self.cold_delete_var = tk.BooleanVar(value=False)
+        chk_del = ttk.Checkbutton(row, text="Delete originals after ZIP creation", variable=self.cold_delete_var)
+        chk_del.pack(side="left", padx=(0, 16))
+
+        btn_scan_cold = ttk.Button(row, text="🔍 Find Cold Files", style="Secondary.TButton", command=self._on_scan_cold)
+        btn_scan_cold.pack(side="right", padx=(6, 0))
+
+        btn_archive = ttk.Button(row, text="🗄️ Compress Cold Files", style="Primary.TButton", command=self._on_archive_cold)
+        btn_archive.pack(side="right")
+
+        cols = ["name", "size", "last_accessed", "path"]
+        heads = ["File Name", "Size", "Last Modified / Accessed", "Full Path"]
+        self.cold_table = ScrollableTreeview(parent, cols, heads)
+        self.cold_table.pack(fill="both", expand=True)
+
+    def _on_scan_cold(self) -> None:
+        target = Path(self.cold_picker.get_path())
+        if not target.exists():
+            messagebox.showerror("Error", f"Folder does not exist:\n{target}")
+            return
+
+        try:
+            days = int(self.cold_days_var.get().strip())
+        except ValueError:
+            days = 90
+
+        self.status_var.set(f"Scanning for files inactive >= {days} days...")
+        self.update_idletasks()
+
+        self.cold_files = ColdStorageAnalyzer.scan_cold_files(target, inactive_days=days)
+        self.cold_table.clear()
+
+        total_bytes = sum(f.size_bytes for f in self.cold_files)
+        for f in self.cold_files[:300]:
+            self.cold_table.insert_row([
+                f.filename,
+                Reporter.format_bytes(f.size_bytes),
+                f.modified_time.strftime("%Y-%m-%d %H:%M"),
+                str(f.path)
+            ])
+
+        self.status_var.set(f"Found {len(self.cold_files)} cold files ({Reporter.format_bytes(total_bytes)}).")
+        if not self.cold_files:
+            messagebox.showinfo("Cold Storage", f"No files inactive for >= {days} days.")
+        else:
+            messagebox.showinfo("Cold Files Discovered", f"Found {len(self.cold_files)} cold files totaling {Reporter.format_bytes(total_bytes)}.")
+
+    def _on_archive_cold(self) -> None:
+        if not self.cold_files:
+            messagebox.showinfo("Notice", "No cold files selected. Run 'Find Cold Files' first.")
+            return
+
+        target = Path(self.cold_picker.get_path())
+        from datetime import datetime
+        dest_zip = target / f"ColdStorage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+
+        confirm = messagebox.askyesno(
+            "Confirm Compression",
+            f"Are you sure you want to package {len(self.cold_files)} files into:\n{dest_zip.name}?\n\n"
+            f"Delete originals: {'YES' if self.cold_delete_var.get() else 'NO'}"
+        )
+        if not confirm:
+            return
+
+        res = ColdStorageArchiver.create_cold_archive(
+            self.cold_files,
+            dest_zip,
+            base_dir=target,
+            delete_sources=self.cold_delete_var.get()
+        )
+
+        if res["success"]:
+            messagebox.showinfo("Archiving Complete", f"{res['message']}\nSaved at: {dest_zip}")
+            self._on_scan_cold()
+        else:
+            messagebox.showerror("Error", res["message"])
 
     def _refresh_usb_drives(self) -> None:
         drives = DriveDetector.get_removable_drives()

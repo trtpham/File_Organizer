@@ -36,6 +36,16 @@ python main.py [OPTIONS]
 | | `--quarantine-secrets` | Move compromised credential files to `_Quarantine/` | `False` |
 | | `--install-context-menu` | Register right-click context menu in Windows Explorer | `False` |
 | | `--uninstall-context-menu` | Remove right-click context menu from Windows Explorer | `False` |
+| | `--archive-cold` | Compress cold/inactive files into a ZIP archive | `False` |
+| | `--archive-days DAYS` | Inactivity age threshold in days for cold storage | `90` |
+| | `--archive-dest PATH` | Custom destination path for archive ZIP | `None` |
+| | `--archive-delete-sources` | Delete original files after successful archive creation | `False` |
+| | `--restore-archive FILE`| Restore/extract a previously created SFO archive ZIP | `None` |
+| | `--detect-cloud` | Detect and list installed cloud folders (OneDrive, GDrive, Dropbox, iCloud) | `False` |
+| | `--sync-cloud NAME` | Sync source directory to detected cloud provider | `None` |
+| | `--lan-share` | Launch local Wi-Fi wireless file exchange server | `False` |
+| | `--lan-port PORT` | Port for LAN Drop server | `8080` |
+| | `--lan-pin PIN` | Optional access PIN for LAN Drop server | `None` |
 | | `--undo [ID]` | Rollback session (`latest` if ID is omitted) | `None` |
 | | `--history` | List all previous organization sessions | `False` |
 | `-w` | `--watch` | Run background watcher daemon with debounce | `False` |
@@ -118,7 +128,37 @@ python main.py --install-context-menu
 python main.py --uninstall-context-menu
 ```
 
-### 10. Undo Previous Operation (100% Rollback)
+### 10. Cold Storage Archiving & Tiered Compression
+```bash
+# Automatically compress files inactive for >= 90 days into an archive:
+python main.py --source "D:/Archives" --archive-cold --archive-days 90
+
+# Compress cold files and delete originals to reclaim disk space:
+python main.py --source "D:/Archives" --archive-cold --archive-days 180 --archive-delete-sources
+
+# Restore/extract a previously created SFO archive:
+python main.py --restore-archive "D:/Archives/Archive_20261027.zip" --dest "D:/Restored"
+```
+
+### 11. Cloud Storage Sync (OneDrive, Google Drive, Dropbox)
+```bash
+# Detect and list active cloud storage directories:
+python main.py --detect-cloud
+
+# Sync important documents or finance files directly to OneDrive:
+python main.py --source "C:/Users/Raven/Documents" --sync-cloud onedrive
+```
+
+### 12. Wireless Cross-Device LAN Drop
+```bash
+# Start local Wi-Fi file exchange server on default port 8080:
+python main.py --source "C:/Users/Raven/Downloads" --lan-share
+
+# Start LAN server with custom port and 4-digit PIN:
+python main.py --source "D:/Share" --lan-share --lan-port 9000 --lan-pin 4821
+```
+
+### 13. Undo Previous Operation (100% Rollback)
 ```bash
 python main.py --undo
 ```

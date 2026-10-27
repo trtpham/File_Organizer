@@ -1,17 +1,31 @@
-# Smart File Organizer 📂 (Enterprise Edition v2.2)
+# Smart File Organizer 📂 (Enterprise Edition v2.3)
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Status](https://img.shields.io/badge/tests-39%2F39%20passed-success.svg)](tests/)
+[![Tests Status](https://img.shields.io/badge/tests-46%2F46%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Clean%20%2F%20Zero--Dependency-orange.svg)](docs/ARCHITECTURE.md)
 
-**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, analyze, and optimize your file system safely and efficiently.
+**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, analyze, wirelessly transfer, and optimize your file system safely and efficiently.
 
 Featuring an intuitive **Modern Dark Theme Desktop GUI (8 Dedicated Tabs)** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero mandatory external dependencies** — running on the pure Python Standard Library with optional high-fidelity extensions for Pillow and PyMuPDF.
 
 ---
 
 ## 🌟 Highlights & Key Capabilities
+
+- 🗄️ **Cold Storage Archiving & Compression Tiering:**
+  - Identifies cold files inactive for $\ge N$ days and bundles them into organized ZIP archives.
+  - Generates internal `manifest.json` metadata records to track original locations and modification dates.
+  - Safe source deletion option reclaiming gigabytes of disk space, with full archive restoration.
+
+- ☁️ **Cloud Storage Connector (OneDrive, Google Drive, Dropbox, iCloud):**
+  - Automatic cross-platform discovery of active local cloud synchronization folders.
+  - Direct routing of important files, backups, and finance records to cloud storage with zero extra configuration.
+
+- 📡 **Wireless Cross-Device LAN Drop:**
+  - Built-in zero-dependency local HTTP transfer server for instant wireless exchange across phones, tablets, and PCs on the same Wi-Fi.
+  - Mobile-friendly web UI for downloading files or uploading directly into `SFO_Incoming/` without cables or mobile apps.
+  - Optional 4-digit PIN authentication for local access control.
 
 - 📊 **Storage Treemap & Disk Analysis:**
   - Fast recursive disk usage analysis displaying space breakdown across directories.
@@ -90,6 +104,9 @@ File_Organizer/
 │   │   ├── deduplicator.py        # Duplicate grouping (Exact & Visual) & resolution
 │   │   ├── renamer.py             # Smart Bulk Renamer (EXIF, ID3, Templates, Casing)
 │   │   ├── syncer.py              # USB Drive detector, incremental sync & snapshot archiver
+│   │   ├── archiver.py            # Cold storage analyzer, compression & restore engine
+│   │   ├── cloud_connector.py     # Auto-detect OneDrive, GDrive, Dropbox & cloud sync
+│   │   ├── lan_share.py           # Embedded HTTP LAN Drop server for wireless transfers
 │   │   ├── treemap.py             # Disk usage tree analyzer & 2D treemap layout engine
 │   │   ├── junk_cleaner.py        # Inactive dev bloat cleaner (node_modules, caches)
 │   │   ├── secret_scanner.py      # DLP secret detector (AWS, OpenAI, GitHub, SSH) & quarantine
@@ -108,7 +125,7 @@ File_Organizer/
 │       ├── theme.py               # Modern Slate Dark Theme for Tkinter/ttk
 │       ├── components.py          # Reusable StatCard, FolderPicker, Treeview
 │       └── app.py                 # 8-Tab Desktop GUI main window
-├── tests/                         # Comprehensive automated test suite (39/39 Tests Pass)
+├── tests/                         # Comprehensive automated test suite (46/46 Tests Pass)
 ├── main.py                        # Unified entrypoint (auto-launches GUI when run directly)
 ├── pyproject.toml                 # Packaging configuration (PEP 621)
 ├── setup.py                       # Support for pip install -e .
@@ -146,7 +163,7 @@ The GUI provides eight dedicated tabs:
 2. **🔍 Duplicate Center:** Switch between Exact Hash (SHA-256) and Visual pHash (dHash with threshold slider).
 3. **🏷️ Smart Renamer:** Batch rename files using metadata tokens (`{name}`, `{counter:03d}`, `{date}`, `{camera}`, `{artist}`), casing conversions, and live diff table.
 4. **📊 Storage Treemap:** Interactive 2D treemap rendering and ranked table of largest space-eating files.
-5. **💾 USB & Backup Sync:** Detects connected USB drives, with incremental copy and snapshot archive modes.
+5. **💾 Sync, Cloud & LAN:** 4 sub-tabs for USB Drive Backup, Cloud Sync (OneDrive/GDrive/Dropbox), Wireless LAN Drop Server, and Cold Storage Archive.
 6. **🛡️ Security & Junk:** Reclaim space by cleaning inactive `node_modules` and scan files for exposed API keys/secrets with quarantine.
 7. **⏪ Undo & History:** View past organization and renaming sessions and click **Undo Selected Session** for instant rollback.
 8. **⚙️ Settings & Shell:** Inspect categories and register the Windows Explorer right-click context menu with one click.
@@ -157,7 +174,24 @@ The GUI provides eight dedicated tabs:
 
 ### Common Commands:
 
-- **Storage Analysis & Largest Files:**
+- **Cold Storage Archiving & Compression:**
+  ```bash
+  python main.py --source "D:/Archives" --archive-cold --archive-days 90
+  python main.py --restore-archive "D:/Archives/Archive_20261027.zip" --dest "D:/Restored"
+  ```
+
+- **Cloud Storage Detection & Sync:**
+  ```bash
+  python main.py --detect-cloud
+  python main.py --source "C:/Users/Raven/Documents" --sync-cloud onedrive
+  ```
+
+- **Wireless LAN Drop (Cross-Device File Exchange):**
+  ```bash
+  python main.py --source "C:/Users/Raven/Downloads" --lan-share --lan-port 8080
+  ```
+
+- **Storage Analysis & Top Files:**
   ```bash
   python main.py --source "C:/Users/Raven" --analyze-disk
   ```
@@ -235,47 +269,54 @@ python -m pytest -v tests/
 
 ### Test Results:
 ```text
-tests/test_cli.py::test_cli_help PASSED                                  [  2%]
-tests/test_cli.py::test_cli_dry_run PASSED                               [  5%]
-tests/test_cli.py::test_cli_history_empty PASSED                         [  7%]
-tests/test_config.py::test_default_categories_loaded PASSED              [ 10%]
-tests/test_config.py::test_extension_category_lookup PASSED              [ 12%]
-tests/test_config.py::test_ignore_pattern_matching PASSED                [ 15%]
-tests/test_config.py::test_size_bucket_determination PASSED              [ 17%]
-tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 20%]
-tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 23%]
-tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 25%]
-tests/test_executor.py::test_live_execution_moves_files PASSED           [ 28%]
-tests/test_executor.py::test_collision_auto_rename PASSED                [ 30%]
-tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 33%]
-tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 35%]
-tests/test_junk_cleaner.py::test_scan_and_clean_junk_directory PASSED    [ 38%]
-tests/test_organizer.py::test_organize_by_extension PASSED               [ 41%]
-tests/test_organizer.py::test_organize_by_size PASSED                    [ 43%]
-tests/test_renamer.py::test_basic_template_renaming PASSED               [ 46%]
-tests/test_renamer.py::test_case_transformations PASSED                  [ 48%]
-tests/test_renamer.py::test_find_and_replace PASSED                      [ 51%]
-tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 53%]
-tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 56%]
-tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 58%]
-tests/test_secret_scanner.py::test_detect_aws_and_openai_secrets PASSED  [ 61%]
-tests/test_secret_scanner.py::test_quarantine_leaked_file PASSED         [ 64%]
-tests/test_shell_integration.py::test_is_supported_returns_bool PASSED   [ 66%]
-tests/test_shell_integration.py::test_is_installed_query PASSED          [ 69%]
-tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 71%]
-tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 74%]
-tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 76%]
-tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 79%]
-tests/test_syncer.py::test_incremental_sync PASSED                       [ 82%]
-tests/test_syncer.py::test_snapshot_sync PASSED                          [ 84%]
-tests/test_treemap.py::test_disk_tree_analysis PASSED                    [ 87%]
-tests/test_treemap.py::test_treemap_layout_coordinates PASSED            [ 89%]
-tests/test_treemap.py::test_find_largest_files PASSED                    [ 92%]
-tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 94%]
+tests/test_archiver.py::test_cold_storage_scanning_and_archiving PASSED  [  2%]
+tests/test_cli.py::test_cli_help PASSED                                  [  4%]
+tests/test_cli.py::test_cli_dry_run PASSED                               [  6%]
+tests/test_cli.py::test_cli_history_empty PASSED                         [  8%]
+tests/test_cli.py::test_cli_detect_cloud PASSED                          [ 10%]
+tests/test_cli.py::test_cli_archive_cold_empty PASSED                    [ 13%]
+tests/test_cloud_connector.py::test_cloud_detector_runs_safely PASSED    [ 15%]
+tests/test_cloud_connector.py::test_cloud_sync_manager PASSED            [ 17%]
+tests/test_config.py::test_default_categories_loaded PASSED              [ 19%]
+tests/test_config.py::test_extension_category_lookup PASSED              [ 21%]
+tests/test_config.py::test_ignore_pattern_matching PASSED                [ 23%]
+tests/test_config.py::test_size_bucket_determination PASSED              [ 26%]
+tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 28%]
+tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 30%]
+tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 32%]
+tests/test_executor.py::test_live_execution_moves_files PASSED           [ 34%]
+tests/test_executor.py::test_collision_auto_rename PASSED                [ 36%]
+tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 39%]
+tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 41%]
+tests/test_junk_cleaner.py::test_scan_and_clean_junk_directory PASSED    [ 43%]
+tests/test_lan_share.py::test_get_local_ip PASSED                        [ 45%]
+tests/test_lan_share.py::test_lan_share_server_lifecycle PASSED          [ 47%]
+tests/test_organizer.py::test_organize_by_extension PASSED               [ 50%]
+tests/test_organizer.py::test_organize_by_size PASSED                    [ 52%]
+tests/test_renamer.py::test_basic_template_renaming PASSED               [ 54%]
+tests/test_renamer.py::test_case_transformations PASSED                  [ 56%]
+tests/test_renamer.py::test_find_and_replace PASSED                      [ 58%]
+tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 60%]
+tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 63%]
+tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 65%]
+tests/test_secret_scanner.py::test_detect_aws_and_openai_secrets PASSED  [ 67%]
+tests/test_secret_scanner.py::test_quarantine_leaked_file PASSED         [ 69%]
+tests/test_shell_integration.py::test_is_supported_returns_bool PASSED   [ 71%]
+tests/test_shell_integration.py::test_is_installed_query PASSED          [ 73%]
+tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 76%]
+tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 78%]
+tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 80%]
+tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 82%]
+tests/test_syncer.py::test_incremental_sync PASSED                       [ 84%]
+tests/test_snapshot_sync PASSED                                          [ 86%]
+tests/test_treemap.py::test_disk_tree_analysis PASSED                    [ 89%]
+tests/test_treemap.py::test_treemap_layout_coordinates PASSED            [ 91%]
+tests/test_treemap.py::test_find_largest_files PASSED                    [ 93%]
+tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 95%]
 tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 97%]
 tests/test_visual_hasher.py::test_visual_similarity_clustering PASSED    [100%]
 
-============================= 39 passed in 0.68s ==============================
+============================= 46 passed in 1.55s ==============================
 ```
 
 ---

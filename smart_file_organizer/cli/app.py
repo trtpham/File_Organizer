@@ -25,6 +25,9 @@ from ..core.shell_integration import WindowsShellIntegration
 from ..core.treemap import DiskAnalyzer
 from ..core.junk_cleaner import DevJunkCleaner
 from ..core.secret_scanner import SecretScanner
+from ..core.archiver import ColdStorageAnalyzer, ColdStorageArchiver
+from ..core.cloud_connector import CloudDetector, CloudSyncManager
+from ..core.lan_share import LANShareServer, get_local_ip
 from ..core.models import OrganizeStrategy, ActionType, SyncProfile, SyncMode
 
 
@@ -174,6 +177,98 @@ def run_cli(args: Optional[List[str]] = None) -> int:
         else:
             print_info("To isolate these files into _Quarantine/, re-run with: --quarantine-secrets")
         return 0
+
+    # 2h. Check for Cold Storage Archiving
+    if parsed_args.archive_cold:
+        target = Path(parsed_args.source or ".").resolve()
+        print_info(f"Scanning for cold files inactive for >= {parsed_args.archive_days} days in: {target}...")
+        cold_files = ColdStorageAnalyzer.scan_cold_files(target, inactive_days=parsed_args.archive_days)
+        if not cold_files:
+            print_success("No cold files found matching the age criteria.")
+            return 0
+        total_size = sum(f.size_bytes for f in cold_files)
+        print_info(f"Identified {len(cold_files)} cold files ({Reporter.format_bytes(total_size)}).")
+
+        from datetime import datetime
+        dest_zip = Path(parsed_args.archive_dest) if parsed_args.archive_dest else (target / f"Archive_{datetime.now().strftime('%Y%m%d')}.zip")
+        print_info(f"Compressing into: {dest_zip}...")
+        res = ColdStorageArchiver.create_cold_archive(
+            cold_files,
+            dest_zip,
+            base_dir=target,
+            delete_sources=parsed_args.archive_delete_sources
+        )
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    if parsed_args.restore_archive:
+        archive_path = Path(parsed_args.restore_archive).resolve()
+        dest_target = Path(parsed_args.dest).resolve() if parsed_args.dest else None
+        print_info(f"Restoring archive: {archive_path}...")
+        res = ColdStorageArchiver.restore_archive(archive_path, target_dir=dest_target)
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    # 2i. Check for Cloud Storage Actions
+    if parsed_args.detect_cloud:
+        print_info("Scanning system for local cloud storage providers...")
+        providers = CloudDetector.detect_all()
+        if not providers:
+            print_warning("No active cloud storage providers detected locally.")
+        else:
+            print_success(f"Detected {len(providers)} cloud storage provider(s):")
+            for p in providers:
+                print(f"  - {p.name:<15} [{p.provider_type}] -> {p.local_path}")
+        return 0
+
+    if parsed_args.sync_cloud:
+        target_src = Path(parsed_args.source or ".").resolve()
+        provider_name = parsed_args.sync_cloud.lower()
+        providers = CloudDetector.detect_all()
+        match = next((p for p in providers if p.name.lower() == provider_name or provider_name in p.name.lower()), None)
+        if not match:
+            print_error(f"Cloud provider '{parsed_args.sync_cloud}' not found on this machine.")
+            return 1
+        print_info(f"Syncing {target_src} to {match.name} ({match.local_path})...")
+        res = CloudSyncManager.sync_to_cloud(target_src, match, dry_run=parsed_args.dry_run)
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    # 2j. Check for LAN Drop Server
+    if parsed_args.lan_share:
+        target_dir = Path(parsed_args.source or ".").resolve()
+        server = LANShareServer(shared_dir=target_dir, port=parsed_args.lan_port, pin=parsed_args.lan_pin)
+        start_res = server.start()
+        if not start_res["success"]:
+            print_error(start_res["message"])
+            return 1
+
+        print_success("=" * 60)
+        print_success("  SFO LAN DROP SERVER IS ONLINE")
+        print_success(f"  URL:  {start_res['url']}")
+        if parsed_args.lan_pin:
+            print_warning(f"  PIN:  {parsed_args.lan_pin}")
+        print_info(f"  Sharing directory: {target_dir}")
+        print_info("  Open this URL in any mobile browser or laptop on your Wi-Fi.")
+        print_info("  Press Ctrl+C to stop server.")
+        print_success("=" * 60)
+        try:
+            import time
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            server.stop()
+            print_info("\nLAN Drop server stopped.")
+            return 0
 
     # 3. Check for Undo command
     if parsed_args.undo:

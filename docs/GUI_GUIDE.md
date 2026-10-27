@@ -42,13 +42,21 @@ You can launch the GUI in two ways:
 - **Top Storage Eaters:** Ranked list of the largest files consuming hard drive capacity.
 - **Fast Traversal:** Scans gigabytes of disk space in seconds with real-time size metrics.
 
-### 5. 💾 USB & Backup Sync
-- **Removable Drive Auto-Detection:** Automatically recognizes USB flash drives and external hard drives upon connection.
-- **Sync Modes:**
-  - `Incremental`: Copies new and modified files only, preserving timestamps.
-  - `Mirror`: Full folder replication.
-  - `Snapshot`: Packages watched directories into timestamped `.zip` archives (ideal for game saves and code snapshots).
-- **Activity Log:** Real-time transfer progress and byte counters.
+### 5. 💾 Sync, Cloud & LAN Drop (4 Sub-Tabs)
+- **🔌 USB Drive Backup:**
+  - Automatically recognizes USB flash drives and external hard drives upon connection.
+  - Supports `Incremental`, `Mirror`, and timestamped `.zip` `Snapshot` modes.
+- **☁️ Cloud Storage Sync:**
+  - One-click auto-detection of local sync directories for Microsoft OneDrive, Google Drive, Dropbox, and Apple iCloud Drive.
+  - Syncs critical documents, game saves, or financial folders straight to the cloud for offsite redundancy.
+- **📡 Wireless Cross-Device LAN Drop:**
+  - Built-in zero-config local HTTP server.
+  - Allows smartphones, tablets, and laptops on the same Wi-Fi to browse and download shared files or upload photos/documents directly into `SFO_Incoming/` without installing any apps or cords.
+  - Optional 4-digit PIN security protection.
+- **🗄️ Cold Storage Archive & Compression Tiering:**
+  - Identifies cold and inactive files (unmodified for $\ge 90$ days).
+  - One-click compression into structured ZIP archives with internal metadata manifests.
+  - Optional automatic deletion of original files to instantly recover gigabytes of hard drive space.
 
 ### 6. 🛡️ Security & Dev Junk Cleaner
 - **Dev Junk Cleaner:**

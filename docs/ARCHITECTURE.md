@@ -7,7 +7,7 @@
 
 ```
 +----------------------------------------------------------------------------------+
-|                            SMART FILE ORGANIZER v2.2                             |
+|                            SMART FILE ORGANIZER v2.3                             |
 +----------------------------------------------------------------------------------+
 |                                  INTERFACES                                      |
 |  smart_file_organizer/gui/                        smart_file_organizer/cli/      |
@@ -26,6 +26,9 @@
 |  ├── deduplicator.py     -> Duplicate grouping (Exact & Visual) & resolution    |
 |  ├── renamer.py          -> Smart Bulk Renamer (EXIF, ID3, Templates, Casing)   |
 |  ├── syncer.py           -> USB detector, incremental sync & snapshot archiver  |
+|  ├── archiver.py         -> Cold storage analyzer, compression & restore engine  |
+|  ├── cloud_connector.py  -> Auto-detect OneDrive, GDrive, Dropbox & cloud sync  |
+|  ├── lan_share.py        -> Embedded HTTP LAN Drop server for wireless transfers |
 |  ├── treemap.py          -> Disk usage tree analyzer & 2D treemap layout engine |
 |  ├── junk_cleaner.py     -> Inactive dev bloat cleaner (node_modules, caches)   |
 |  ├── secret_scanner.py   -> DLP secret detector (AWS, OpenAI, GitHub, SSH)      |

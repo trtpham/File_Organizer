@@ -24,6 +24,9 @@ from .shell_integration import WindowsShellIntegration
 from .treemap import DiskAnalyzer, DiskNode
 from .junk_cleaner import DevJunkCleaner, JunkItem, JunkCategory
 from .secret_scanner import SecretScanner, SecretFinding
+from .archiver import ColdStorageAnalyzer, ColdStorageArchiver
+from .cloud_connector import CloudProvider, CloudDetector, CloudSyncManager
+from .lan_share import LANShareServer, LANShareHandler, get_local_ip
 
 __all__ = [
     "FileInfo",
@@ -62,4 +65,12 @@ __all__ = [
     "JunkCategory",
     "SecretScanner",
     "SecretFinding",
+    "ColdStorageAnalyzer",
+    "ColdStorageArchiver",
+    "CloudProvider",
+    "CloudDetector",
+    "CloudSyncManager",
+    "LANShareServer",
+    "LANShareHandler",
+    "get_local_ip",
 ]

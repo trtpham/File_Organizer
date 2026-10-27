@@ -2,7 +2,7 @@
 
 ## Project Overview
 - **Product Name:** Smart File Organizer (SFO)
-- **Version:** 2.2.0 (Enterprise Edition)
+- **Version:** 2.3.0 (Enterprise Edition)
 - **Author:** Pham Minh Triet (Raven)
 - **License:** MIT
 
@@ -44,3 +44,6 @@ Users' computers, especially `Downloads`, `Desktop`, and shared network storage,
 - **AC-11 (Dev Junk Cleaner):** Scan and clean inactive `node_modules`, `.venv`, and build caches inactive for over 14 days.
 - **AC-12 (Secret DLP Scanner):** Detect AWS keys, OpenAI tokens, GitHub PATs, and SSH keys with one-click quarantine into `_Quarantine/`.
 - **AC-13 (Windows Explorer Shell):** Register/unregister right-click menu items under `HKCU` without requiring Administrator rights.
+- **AC-14 (Cold Storage Archiver):** Scan files inactive for $\ge N$ days, compress into ZIP archives with internal metadata manifests, and safely reclaim disk space.
+- **AC-15 (Cloud Storage Connector):** Auto-discover active local roots for OneDrive, Google Drive, Dropbox, and iCloud Drive, and sync folders with incremental/mirror/snapshot modes.
+- **AC-16 (Wireless LAN Drop):** Built-in zero-dependency HTTP server with mobile upload/download UI and optional PIN protection for instant local wireless transfers.
