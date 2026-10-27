@@ -6,12 +6,13 @@ import time
 import threading
 from pathlib import Path
 from typing import Dict, Optional, Callable, Set
-from .models import FileInfo, OrganizeStrategy
+from .models import FileInfo, OrganizeStrategy, SyncProfile
 from .scanner import FileScanner
 from .organizer import Organizer
 from .executor import TransactionExecutor
 from .undo_manager import UndoManager
 from .config import ConfigManager
+from .syncer import DriveDetector, FolderSynchronizer
 
 
 class DirectoryWatcher:
@@ -23,13 +24,17 @@ class DirectoryWatcher:
         destination_dir: Optional[Path] = None,
         strategy: OrganizeStrategy = OrganizeStrategy.EXTENSION,
         config: Optional[ConfigManager] = None,
-        undo_manager: Optional[UndoManager] = None
+        undo_manager: Optional[UndoManager] = None,
+        smart_receipts: bool = False,
+        sync_profiles: Optional[List[SyncProfile]] = None
     ):
         self.source_dir = Path(source_dir).resolve()
         self.destination_dir = Path(destination_dir or source_dir).resolve()
         self.strategy = strategy
         self.config = config or ConfigManager()
         self.undo_manager = undo_manager or UndoManager()
+        self.smart_receipts = smart_receipts
+        self.sync_profiles = sync_profiles or []
 
         self.scanner = FileScanner(self.config)
         self.organizer = Organizer(self.config)
@@ -40,6 +45,7 @@ class DirectoryWatcher:
 
         # Track file stability: path -> (last_size, last_stable_time)
         self._file_states: Dict[Path, Dict[str, float]] = {}
+        self._last_usb_drives: Set[str] = set()
 
         # Debounce settings
         settings = self.config.watcher_settings
@@ -117,6 +123,24 @@ class DirectoryWatcher:
         for p in stale_paths:
             self._file_states.pop(p, None)
 
+        # Check for USB Drive insertions and auto-sync
+        if self.sync_profiles:
+            self._check_usb_and_sync()
+
+    def _check_usb_and_sync(self) -> None:
+        """Inspects connected USB drives and runs matching sync profiles."""
+        drives = DriveDetector.get_removable_drives()
+        current_drive_paths = {d["path"] for d in drives}
+
+        # Find newly connected drives
+        new_drives = current_drive_paths - self._last_usb_drives
+        if new_drives:
+            for profile in self.sync_profiles:
+                if profile.enabled and profile.trigger_on_usb:
+                    FolderSynchronizer.sync(profile)
+
+        self._last_usb_drives = current_drive_paths
+
     def _organize_single_file(
         self,
         file_info: FileInfo,
@@ -126,7 +150,8 @@ class DirectoryWatcher:
         records = self.organizer.plan_organization(
             [file_info],
             self.destination_dir,
-            strategy=self.strategy
+            strategy=self.strategy,
+            smart_receipts=self.smart_receipts
         )
         if not records or records[0].action_type.value == "SKIP":
             return

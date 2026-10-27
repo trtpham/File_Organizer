@@ -86,10 +86,79 @@ Examples:
         help="Scan and resolve duplicate files using 3-tiered hashing"
     )
     parser.add_argument(
+        "--visual-dedupe",
+        action="store_true",
+        help="Scan and cluster visually similar images using perceptual hashing (dHash)"
+    )
+    parser.add_argument(
+        "--similarity",
+        type=float,
+        default=0.90,
+        help="Perceptual similarity threshold between 0.50 and 1.0 (default: 0.90)"
+    )
+    parser.add_argument(
         "--dedupe-action",
         choices=["move_to_duplicates", "delete", "report"],
         default="move_to_duplicates",
         help="Action for duplicate files (default: move_to_duplicates)"
+    )
+
+    # Smart Bulk Renaming
+    parser.add_argument(
+        "--rename-template",
+        type=str,
+        default=None,
+        help="Batch rename template with tokens like {name}, {counter:03d}, {date}, {camera}, {artist}"
+    )
+    parser.add_argument(
+        "--rename-find",
+        type=str,
+        default="",
+        help="Substring or pattern to find for renaming"
+    )
+    parser.add_argument(
+        "--rename-replace",
+        type=str,
+        default="",
+        help="Replacement text for renaming"
+    )
+    parser.add_argument(
+        "--rename-case",
+        choices=["lowercase", "uppercase", "title_case", "snake_case", "kebab_case"],
+        default=None,
+        help="Apply casing transformation during rename"
+    )
+
+    # Smart Receipt & Financial Filtering
+    parser.add_argument(
+        "--smart-receipts",
+        action="store_true",
+        help="Analyze text and auto-route invoices/receipts into Finance_<Year> folders"
+    )
+
+    # Auto-Sync & USB Backup
+    parser.add_argument(
+        "--sync-source",
+        type=str,
+        default=None,
+        help="Source directory for folder synchronization / backup"
+    )
+    parser.add_argument(
+        "--sync-dest",
+        type=str,
+        default=None,
+        help="Target backup or USB destination directory"
+    )
+    parser.add_argument(
+        "--sync-mode",
+        choices=["incremental", "mirror", "snapshot"],
+        default="incremental",
+        help="Synchronization mode (default: incremental)"
+    )
+    parser.add_argument(
+        "--detect-usb",
+        action="store_true",
+        help="Detect and list currently connected removable USB drives"
     )
 
     # Undo and history

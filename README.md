@@ -1,43 +1,51 @@
-# Smart File Organizer 📂 (Enterprise Edition v2.0)
+# Smart File Organizer 📂 (Enterprise Edition v2.1)
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Status](https://img.shields.io/badge/tests-19%2F19%20passed-success.svg)](tests/)
+[![Tests Status](https://img.shields.io/badge/tests-31%2F31%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Clean%20%2F%20Zero--Dependency-orange.svg)](docs/ARCHITECTURE.md)
 
-**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, and optimize your file system safely and efficiently.
+**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, and optimize your file system safely and efficiently.
 
-Featuring both an intuitive **Modern Dark Theme Desktop GUI** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero external dependencies** — running entirely on the Python Standard Library.
+Featuring an intuitive **Modern Dark Theme Desktop GUI (6 Dedicated Tabs)** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero mandatory external dependencies** — running on the pure Python Standard Library with optional high-fidelity extensions for Pillow and PyMuPDF.
 
 ---
 
 ## 🌟 Highlights & Key Capabilities
 
+- 🏷️ **Smart Bulk Renamer (EXIF & ID3 Tags):**
+  - Extracts photo metadata (Date Taken, Camera Model, Resolution) and audio metadata (Title, Artist, Album, Track).
+  - Rich templating: `{name}`, `{counter:03d}`, `{date}`, `{time}`, `{camera}`, `{artist}`, `{title}`, `{album}`.
+  - Case transformations: `lowercase`, `uppercase`, `title_case`, `snake_case`, `kebab_case`.
+  - Find & Replace and numbering with 100% reversible Undo support.
+
+- 🔍 **Visual Duplicate Cleaner (Perceptual pHash) + Exact Hash (SHA-256):**
+  - **Exact Hash Mode:** 3-tiered filtration (Size $\rightarrow$ 64KB Chunk $\rightarrow$ Full SHA-256) for 100% identical files.
+  - **Visual pHash Mode:** 64-bit difference hashing (`dHash`) with Hamming distance comparison to find resized, re-compressed, or near-identical photos with a configurable similarity threshold ($80\% - 100\%$).
+  - Intelligently recommends preserving the best resolution or largest file.
+
+- 🧾 **Receipt & Bill Organizer (Smart Financial Sort):**
+  - Content inspection for PDF and image invoices, receipts, and utility bills.
+  - Multilingual heuristic keyword matching (*English & Vietnamese:* EVN, Viettel, VNPT, AWS, Google, Apple, VAT, Total Amount, Hóa đơn điện tử).
+  - Extracts transaction date and vendor, automatically routing files into `Finance_<Year>/<Vendor>` folders.
+
+- 💾 **Auto-Sync USB Backup & App Save Backuper:**
+  - Automated detection of removable USB storage drives upon connection.
+  - Incremental folder synchronization preserving file modification timestamps.
+  - Timestamped `.zip` snapshot archiving (ideal for game saves and code projects).
+
 - 🧹 **Multi-Strategy Organization:**
   - Automatically sorts **over 150+ file formats** into organized category directories (`Images`, `Documents`, `Spreadsheets`, `Presentations`, `Audio`, `Videos`, `Archives`, `Executables`, `Code`, `Fonts`, `3D_and_CAD`, `Torrents`, `Others`).
-  - Organizes files chronologically by **Date** (`YYYY/MM` or `YYYY-MM-DD`).
-  - Organizes files by **Size** buckets (`Tiny <1MB`, `Small`, `Medium`, `Large`, `Huge >1GB`).
-  - Supports custom rule matching using **Regular Expressions (Regex)**.
-
-- 🔍 **High-Performance 3-Tiered Deduplication:**
-  - Eliminates disk bottlenecks and freezing caused by traditional full-file hashing:
-    - **Tier 1 (Size Clustering):** Groups files by exact byte size, bypassing >90% of unique files without reading disk contents.
-    - **Tier 2 (Fast Partial Chunk Hash):** Hashes only the first 64 KB of size-matched candidate files.
-    - **Tier 3 (Full Cryptographic SHA-256):** Verifies surviving candidates with full SHA-256 to guarantee 100% bit-for-bit identity.
-  - Automatically quarantines duplicate files into a safe `_Duplicates/` folder or performs safe deletion, preserving the best original file according to your selected policy (`oldest`, `newest`, or `shortest_path`).
+  - Organizes files chronologically by **Date** (`YYYY/MM` or `YYYY-MM-DD`) or **Size** ranges.
 
 - 🛡️ **Zero-Risk Safety & 100% Rollback (Transactional Engine):**
   - **Dry-Run Mode:** Simulates and displays planned actions in a detailed table without writing or moving a single byte on disk.
-  - **1-Click Undo / Rollback:** Every session is atomically recorded in a transactional journal (SQLite & JSON). A single click or `--undo` command restores all files to their exact original locations and automatically removes newly created empty directories.
+  - **1-Click Undo / Rollback:** Every session is atomically recorded in an append-only journal (SQLite & JSON). A single click or `--undo` command restores all files to their exact original locations.
   - **Collision Resolution:** Automatically avoids overwriting files by renaming with incremented counters: `file (1).ext`.
 
 - ⚡ **Real-Time Directory Watcher (Daemon Mode):**
   - Runs in the background to monitor designated folders (such as `Downloads`).
-  - Features **Download Stabilization Debounce**: waits for file size to stabilize and ignores incomplete downloads (`.crdownload`, `.tmp`, `.part`) before triggering organization.
-
-- 🖥️ **Dual Interface (Desktop GUI & Rich CLI):**
-  - **Modern Desktop GUI:** Built with Tkinter/ttk in a sleek slate dark palette, featuring metric cards, an interactive dry-run table, duplicate manager, and an undo history viewer.
-  - **Rich CLI:** Standard POSIX/GNU flags, colored ANSI formatting, live progress indicators, and standalone HTML dashboard report generation.
+  - Features **Download Stabilization Debounce**: waits for file size to stabilize and ignores incomplete downloads (`.crdownload`, `.tmp`, `.part`).
 
 ---
 
@@ -61,11 +69,15 @@ File_Organizer/
 │   │   ├── config.py              # ConfigManager & user override handling
 │   │   ├── scanner.py             # Recursive directory scanner with pattern exclusion
 │   │   ├── hasher.py              # 3-tiered chunked hasher (Size -> 64KB -> SHA-256)
-│   │   ├── deduplicator.py        # Duplicate grouping & keep policy resolution
-│   │   ├── organizer.py           # Organization algorithms (Ext, Date, Size, Regex)
+│   │   ├── visual_hasher.py       # Perceptual difference hasher (dHash) & similarity engine
+│   │   ├── deduplicator.py        # Duplicate grouping (Exact & Visual) & resolution
+│   │   ├── renamer.py             # Smart Bulk Renamer (EXIF, ID3, Templates, Casing)
+│   │   ├── syncer.py              # USB Drive detector, incremental sync & snapshot archiver
+│   │   ├── smart_filter.py        # PDF text extractor & financial invoice classifier
+│   │   ├── organizer.py           # Organization algorithms (Ext, Date, Size, Regex, Receipts)
 │   │   ├── executor.py            # Transaction execution & collision handling
 │   │   ├── undo_manager.py        # SQLite/JSON journaling & 100% rollback engine
-│   │   ├── watcher.py             # Background watcher daemon with debounce
+│   │   ├── watcher.py             # Background watcher daemon with debounce & USB sync
 │   │   └── reporter.py            # Console, Markdown, and HTML Dashboard reports
 │   ├── cli/                       # Command-line interface package
 │   │   ├── parser.py              # Argument parsing and validation
@@ -74,8 +86,8 @@ File_Organizer/
 │   └── gui/                       # Desktop graphical interface package
 │       ├── theme.py               # Modern Slate Dark Theme for Tkinter/ttk
 │       ├── components.py          # Reusable StatCard, FolderPicker, Treeview
-│       └── app.py                 # Multi-tab Desktop GUI main window
-├── tests/                         # Comprehensive automated test suite (19/19 Tests Pass)
+│       └── app.py                 # 6-Tab Desktop GUI main window
+├── tests/                         # Comprehensive automated test suite (31/31 Tests Pass)
 ├── main.py                        # Unified entrypoint (auto-launches GUI when run directly)
 ├── pyproject.toml                 # Packaging configuration (PEP 621)
 ├── setup.py                       # Support for pip install -e .
@@ -90,7 +102,7 @@ File_Organizer/
 ### 1. Prerequisites
 - **Operating System:** Windows 10/11, macOS, or Linux.
 - **Python:** Version 3.10 or later.
-- **External Dependencies:** **None** (operates entirely with Python's standard library).
+- **External Dependencies:** **None** (runs entirely with Python's standard library; Pillow/PyMuPDF supported automatically when available).
 
 ### 2. Clone the Repository
 ```bash
@@ -100,7 +112,7 @@ cd File_Organizer
 
 ---
 
-## 🖥️ Desktop GUI Usage
+## 🖥️ Desktop GUI Usage (6 Dedicated Tabs)
 
 Launch the desktop interface simply by running:
 ```bash
@@ -108,17 +120,40 @@ python main.py
 ```
 *(or explicitly: `python main.py --gui`)*
 
-The GUI provides four dedicated tabs:
-1. **🧹 Organize & Clean:** Select source and destination folders, pick an organization strategy, click **Preview Actions** to inspect the diff table, and click **Execute Now**.
-2. **🔍 Duplicate Center:** Scan for duplicate files, view wasted storage space, and quarantine redundant copies into `_Duplicates/`.
-3. **⏪ Undo & History:** View past organization sessions and click **Undo Selected Session** to instantly restore files to their previous paths.
-4. **⚙️ Rules & Settings:** Inspect and customize supported file extensions and categories.
+The GUI provides six dedicated tabs:
+1. **🧹 Organize & Clean:** Select folders, choose strategy, toggle Smart Financial Sort, click **Preview Actions**, and execute.
+2. **🔍 Duplicate Center:** Switch between Exact Hash (SHA-256) and Visual pHash (dHash with threshold slider).
+3. **🏷️ Smart Renamer:** Batch rename files using metadata tokens (`{name}`, `{counter:03d}`, `{date}`, `{camera}`, `{artist}`), casing conversions, and live diff table.
+4. **💾 USB & Backup Sync:** Detects connected USB drives, with incremental copy and snapshot archive modes.
+5. **⏪ Undo & History:** View past organization and renaming sessions and click **Undo Selected Session** for instant rollback.
+6. **⚙️ Rules & Settings:** Inspect and customize supported file extensions and categories.
 
 ---
 
 ## ⌨️ Command-Line Interface (CLI) Usage
 
 ### Common Commands:
+
+- **Smart Bulk Renaming with Metadata & Counter:**
+  ```bash
+  python main.py --source "D:/Photos" --rename-template "{date}_{camera}_{counter:03d}"
+  ```
+
+- **Perceptual Visual Duplicate Detection (pHash):**
+  ```bash
+  python main.py --source "D:/Photos" --visual-dedupe --similarity 0.90
+  ```
+
+- **Smart Financial Invoice & Receipt Organization:**
+  ```bash
+  python main.py --source "C:/Users/Raven/Downloads" --smart-receipts
+  ```
+
+- **USB Drive Detection & Incremental Backup:**
+  ```bash
+  python main.py --detect-usb
+  python main.py --sync-source "C:/Users/Raven/Documents" --sync-dest "E:/USB_Backup" --sync-mode incremental
+  ```
 
 - **Safe Dry-Run Preview (Recommended on first run):**
   ```bash
@@ -130,39 +165,14 @@ The GUI provides four dedicated tabs:
   python main.py --source "C:/Users/Raven/Downloads"
   ```
 
-- **Organize Photos or Documents by Date (`YYYY/MM`):**
-  ```bash
-  python main.py --source "D:/Photos" --by-date
-  ```
-
-- **Group Files by Size Ranges:**
-  ```bash
-  python main.py --source "D:/Downloads" --by-size
-  ```
-
-- **Detect and Quarantine Duplicate Files:**
-  ```bash
-  python main.py --source "D:/Storage" --dedupe
-  ```
-
-- **Rollback the Most Recent Organization Session:**
+- **Rollback the Most Recent Session (100% Undo):**
   ```bash
   python main.py --undo
-  ```
-
-- **View Past Session History:**
-  ```bash
-  python main.py --history
   ```
 
 - **Start Background Watcher Daemon (Auto-organize Downloads):**
   ```bash
   python main.py --source "C:/Users/Raven/Downloads" --watch
-  ```
-
-- **Generate Standalone HTML Dashboard Report:**
-  ```bash
-  python main.py --source "C:/Users/Raven/Downloads" --report "report.html"
   ```
 
 For a complete reference of flags and options, see [CLI Reference Guide](docs/CLI_USAGE.md) or run `python main.py --help`.
@@ -171,7 +181,7 @@ For a complete reference of flags and options, see [CLI Reference Guide](docs/CL
 
 ## 🧪 Automated Testing
 
-Smart File Organizer includes a comprehensive test suite covering scanner filtering, tiered hashing, multi-strategy organization, collision resolution, dry-run simulation, and transaction rollbacks:
+Smart File Organizer includes a comprehensive test suite covering scanner filtering, tiered hashing, perceptual dHash, metadata renaming, USB syncing, smart receipt classification, collision resolution, dry-run simulation, and transaction rollbacks:
 
 ```bash
 python -m pytest -v tests/
@@ -179,27 +189,39 @@ python -m pytest -v tests/
 
 ### Test Results:
 ```text
-tests/test_cli.py::test_cli_help PASSED                                  [  5%]
-tests/test_cli.py::test_cli_dry_run PASSED                               [ 10%]
-tests/test_cli.py::test_cli_history_empty PASSED                         [ 15%]
-tests/test_config.py::test_default_categories_loaded PASSED              [ 21%]
-tests/test_config.py::test_extension_category_lookup PASSED              [ 26%]
-tests/test_config.py::test_ignore_pattern_matching PASSED                [ 31%]
-tests/test_config.py::test_size_bucket_determination PASSED              [ 36%]
-tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 42%]
-tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 47%]
-tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 52%]
-tests/test_executor.py::test_live_execution_moves_files PASSED           [ 57%]
-tests/test_executor.py::test_collision_auto_rename PASSED                [ 63%]
-tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 68%]
-tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 73%]
-tests/test_organizer.py::test_organize_by_extension PASSED               [ 78%]
-tests/test_organizer.py::test_organize_by_size PASSED                    [ 84%]
-tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 89%]
-tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 94%]
-tests/test_undo.py::test_undo_restores_all_files PASSED                  [100%]
+tests/test_cli.py::test_cli_help PASSED                                  [  3%]
+tests/test_cli.py::test_cli_dry_run PASSED                               [  6%]
+tests/test_cli.py::test_cli_history_empty PASSED                         [  9%]
+tests/test_config.py::test_default_categories_loaded PASSED              [ 12%]
+tests/test_config.py::test_extension_category_lookup PASSED              [ 16%]
+tests/test_config.py::test_ignore_pattern_matching PASSED                [ 19%]
+tests/test_config.py::test_size_bucket_determination PASSED              [ 22%]
+tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 25%]
+tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 29%]
+tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 32%]
+tests/test_executor.py::test_live_execution_moves_files PASSED           [ 35%]
+tests/test_executor.py::test_collision_auto_rename PASSED                [ 38%]
+tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 41%]
+tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 45%]
+tests/test_organizer.py::test_organize_by_extension PASSED               [ 48%]
+tests/test_organizer.py::test_organize_by_size PASSED                    [ 51%]
+tests/test_renamer.py::test_basic_template_renaming PASSED               [ 54%]
+tests/test_renamer.py::test_case_transformations PASSED                  [ 58%]
+tests/test_renamer.py::test_find_and_replace PASSED                      [ 61%]
+tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 64%]
+tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 67%]
+tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 70%]
+tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 74%]
+tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 77%]
+tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 80%]
+tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 83%]
+tests/test_syncer.py::test_incremental_sync PASSED                       [ 87%]
+tests/test_syncer.py::test_snapshot_sync PASSED                          [ 90%]
+tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 93%]
+tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 96%]
+tests/test_visual_hasher.py::test_visual_similarity_clustering PASSED    [100%]
 
-============================= 19 passed in 0.36s ==============================
+============================= 31 passed in 0.81s ==============================
 ```
 
 ---

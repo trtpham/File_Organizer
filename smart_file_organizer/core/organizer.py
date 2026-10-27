@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from .models import FileInfo, ActionRecord, ActionType, OrganizeStrategy
 from .config import ConfigManager
+from .smart_filter import ReceiptClassifier
 
 
 class Organizer:
@@ -20,7 +21,8 @@ class Organizer:
         files: List[FileInfo],
         destination_dir: Path,
         strategy: OrganizeStrategy = OrganizeStrategy.EXTENSION,
-        sub_organize_by_date: bool = False
+        sub_organize_by_date: bool = False,
+        smart_receipts: bool = False
     ) -> List[ActionRecord]:
         """
         Calculates destination folders and generates planned ActionRecords for each file.
@@ -29,9 +31,22 @@ class Organizer:
         records: List[ActionRecord] = []
 
         for f in files:
-            subfolder = self._determine_folder(f, strategy)
+            is_financial = False
+            msg_prefix = "Organize"
 
-            if sub_organize_by_date and strategy != OrganizeStrategy.DATE:
+            if smart_receipts and f.extension.lower() in (".pdf", ".txt", ".csv", ".jpg", ".png"):
+                receipt = ReceiptClassifier.analyze_file(f)
+                if receipt.is_receipt:
+                    vendor_name = receipt.vendor or "Invoices"
+                    year_val = receipt.year or f.modified_time.year
+                    subfolder = f"Finance_{year_val}/{vendor_name}"
+                    is_financial = True
+                    msg_prefix = f"Smart Sort ({receipt.summary})"
+
+            if not is_financial:
+                subfolder = self._determine_folder(f, strategy)
+
+            if sub_organize_by_date and strategy != OrganizeStrategy.DATE and not is_financial:
                 date_sub = self._format_date_folder(f)
                 target_dir = dest_root / subfolder / date_sub
             else:
@@ -56,7 +71,7 @@ class Organizer:
                     destination_path=target_path,
                     file_size=f.size_bytes,
                     status="PENDING",
-                    message=f"Organize into '{subfolder}'"
+                    message=f"{msg_prefix} into '{subfolder}'"
                 ))
 
         return records

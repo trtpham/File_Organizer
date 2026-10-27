@@ -127,6 +127,74 @@ class DuplicateGroup:
 
 
 @dataclass
+class VisualDuplicateGroup:
+    """Represents a group of visually similar images sharing similar perceptual hash."""
+    phash: str
+    files: List[FileInfo]
+    similarity_score: float = 1.0
+    suggested_keep: Optional[FileInfo] = None
+
+    @property
+    def total_count(self) -> int:
+        return len(self.files)
+
+
+class SyncMode(str, Enum):
+    MIRROR = "mirror"
+    INCREMENTAL = "incremental"
+    SNAPSHOT = "snapshot"
+
+
+@dataclass
+class SyncProfile:
+    """Configuration profile for automated folder / USB synchronization."""
+    name: str
+    source_dir: Path
+    dest_dir: Path
+    mode: SyncMode = SyncMode.INCREMENTAL
+    enabled: bool = True
+    trigger_on_usb: bool = False
+    usb_volume_name: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "source_dir": str(self.source_dir),
+            "dest_dir": str(self.dest_dir),
+            "mode": self.mode.value,
+            "enabled": self.enabled,
+            "trigger_on_usb": self.trigger_on_usb,
+            "usb_volume_name": self.usb_volume_name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SyncProfile":
+        return cls(
+            name=data["name"],
+            source_dir=Path(data["source_dir"]),
+            dest_dir=Path(data["dest_dir"]),
+            mode=SyncMode(data.get("mode", "incremental")),
+            enabled=data.get("enabled", True),
+            trigger_on_usb=data.get("trigger_on_usb", False),
+            usb_volume_name=data.get("usb_volume_name"),
+        )
+
+
+@dataclass
+class ReceiptMetadata:
+    """Extracted financial metadata from invoices, bills, and receipts."""
+    is_receipt: bool = False
+    vendor: Optional[str] = None
+    date_str: Optional[str] = None
+    year: Optional[int] = None
+    month: Optional[int] = None
+    amount: Optional[str] = None
+    currency: Optional[str] = None
+    confidence: float = 0.0
+    summary: str = ""
+
+
+@dataclass
 class SessionLog:
     """Complete record of an organization or deduplication session."""
     session_id: str

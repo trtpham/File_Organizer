@@ -5,8 +5,9 @@ High-performance duplicate file detection using 3-tiered hashing.
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict, Optional, Callable
-from .models import FileInfo, DuplicateGroup, ActionRecord, ActionType
+from .models import FileInfo, DuplicateGroup, VisualDuplicateGroup, ActionRecord, ActionType
 from .hasher import TieredHasher
+from .visual_hasher import VisualSimilarityEngine
 from .config import ConfigManager
 
 
@@ -136,6 +137,54 @@ class Deduplicator:
                         file_size=file_info.size_bytes,
                         file_hash=file_info.full_hash,
                         message=f"Duplicate of {keep_file.path.name if keep_file else 'unknown'}"
+                    ))
+
+        return records
+
+    def find_visual_duplicates(
+        self,
+        files: List[FileInfo],
+        similarity_threshold: float = 0.90
+    ) -> List[VisualDuplicateGroup]:
+        """Finds visually similar images using perceptual hashing (dHash)."""
+        engine = VisualSimilarityEngine(similarity_threshold=similarity_threshold)
+        return engine.find_visual_duplicates(files)
+
+    def plan_visual_deduplication_actions(
+        self,
+        groups: List[VisualDuplicateGroup],
+        destination_dir: Path,
+        action_mode: str = "move_to_duplicates"
+    ) -> List[ActionRecord]:
+        """Plans actions to isolate visually redundant images."""
+        records: List[ActionRecord] = []
+        dup_folder_name = self.config.deduplication_settings.get("duplicates_folder_name", "_Duplicates")
+        duplicates_root = destination_dir / dup_folder_name / "Visual_Duplicates"
+
+        for group in groups:
+            keep_file = group.suggested_keep
+            for file_info in group.files:
+                if keep_file and file_info.path == keep_file.path:
+                    continue
+
+                if action_mode == "delete":
+                    records.append(ActionRecord(
+                        action_type=ActionType.DELETE,
+                        source_path=file_info.path,
+                        destination_path=None,
+                        file_size=file_info.size_bytes,
+                        file_hash=group.phash,
+                        message=f"Visual duplicate of {keep_file.path.name if keep_file else 'unknown'} (Sim: {group.similarity_score * 100:.0f}%)"
+                    ))
+                else:
+                    target_dest = duplicates_root / file_info.filename
+                    records.append(ActionRecord(
+                        action_type=ActionType.DEDUPLICATE,
+                        source_path=file_info.path,
+                        destination_path=target_dest,
+                        file_size=file_info.size_bytes,
+                        file_hash=group.phash,
+                        message=f"Visual duplicate of {keep_file.path.name if keep_file else 'unknown'} (Sim: {group.similarity_score * 100:.0f}%)"
                     ))
 
         return records

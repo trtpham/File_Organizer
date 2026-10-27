@@ -19,7 +19,9 @@ from ..core.executor import TransactionExecutor
 from ..core.undo_manager import UndoManager
 from ..core.watcher import DirectoryWatcher
 from ..core.reporter import Reporter
-from ..core.models import OrganizeStrategy, ActionType
+from ..core.renamer import SmartBulkRenamer
+from ..core.syncer import DriveDetector, FolderSynchronizer
+from ..core.models import OrganizeStrategy, ActionType, SyncProfile, SyncMode
 
 
 def run_cli(args: Optional[List[str]] = None) -> int:
@@ -65,6 +67,31 @@ def run_cli(args: Optional[List[str]] = None) -> int:
         print_info("Recent Organization & Cleanup Sessions:")
         print_table(headers, rows)
         return 0
+
+    # 2b. Check for USB drive detection
+    if parsed_args.detect_usb:
+        drives = DriveDetector.get_removable_drives()
+        if not drives:
+            print_info("No removable USB drives currently detected.")
+        else:
+            print_success(f"Detected {len(drives)} removable drive(s):")
+            for d in drives:
+                print(f"  - Path: {d['path']} | Label: {d['label']}")
+        return 0
+
+    # 2c. Check for Folder / USB Synchronization
+    if parsed_args.sync_source and parsed_args.sync_dest:
+        src = Path(parsed_args.sync_source)
+        dst = Path(parsed_args.sync_dest)
+        mode = SyncMode(parsed_args.sync_mode)
+        print_info(f"Starting {mode.value.upper()} sync: {src} -> {dst}")
+        profile = SyncProfile(name="CLI Sync", source_dir=src, dest_dir=dst, mode=mode)
+        res = FolderSynchronizer.sync(profile, dry_run=parsed_args.dry_run)
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res.get("error", "Sync failed."))
+        return 0 if res["success"] else 1
 
     # 3. Check for Undo command
     if parsed_args.undo:
@@ -143,8 +170,42 @@ def run_cli(args: Optional[List[str]] = None) -> int:
     executor = TransactionExecutor(config)
     all_records = []
 
-    # A. Deduplication Flow if requested
-    if parsed_args.dedupe:
+    # A1. Smart Bulk Renaming Flow if requested
+    if parsed_args.rename_template:
+        print_info(f"Planning bulk rename with template: '{parsed_args.rename_template}'...")
+        renamer = SmartBulkRenamer()
+        rename_records = renamer.plan_rename(
+            files,
+            template=parsed_args.rename_template,
+            find_text=parsed_args.rename_find,
+            replace_text=parsed_args.rename_replace,
+            case_transform=parsed_args.rename_case
+        )
+        all_records.extend(rename_records)
+
+    # A2. Visual Duplicate Identification (pHash)
+    elif parsed_args.visual_dedupe:
+        print_info(f"Running Perceptual Visual Duplicate Detection (Threshold: {parsed_args.similarity * 100:.0f}%)...")
+        deduplicator = Deduplicator(config)
+        v_groups = deduplicator.find_visual_duplicates(files, similarity_threshold=parsed_args.similarity)
+        if not v_groups:
+            print_success("No visual duplicate images found!")
+        else:
+            print_warning(f"Found {len(v_groups)} visual duplicate image clusters!")
+            if parsed_args.dedupe_action == "report":
+                for g in v_groups:
+                    print(f"  Visual Cluster (pHash: {g.phash[:8]}..., Avg Sim: {g.similarity_score*100:.0f}%):")
+                    for df in g.files:
+                        is_keep = " [ORIGINAL / BEST RES]" if df == g.suggested_keep else " [VISUAL DUPLICATE]"
+                        print(f"    - {df.path.name}{is_keep}")
+            else:
+                v_records = deduplicator.plan_visual_deduplication_actions(
+                    v_groups, dest_dir, action_mode=parsed_args.dedupe_action
+                )
+                all_records.extend(v_records)
+
+    # A3. Deduplication Flow if requested
+    elif parsed_args.dedupe:
         print_info("Running 3-tiered duplicate identification...")
         deduplicator = Deduplicator(config)
 
@@ -177,14 +238,19 @@ def run_cli(args: Optional[List[str]] = None) -> int:
                 )
                 all_records.extend(dup_records)
 
-    # B. Organization Flow (if not dedupe-only or along with dedupe)
-    if not (parsed_args.dedupe and parsed_args.dedupe_action == "report"):
+    # B. Organization Flow (if not rename-only or report-only)
+    if not parsed_args.rename_template and not (parsed_args.dedupe and parsed_args.dedupe_action == "report"):
         organizer = Organizer(config)
         # Filter out files that were already planned for duplicate deletion/move
         handled_paths = {r.source_path for r in all_records}
         remaining_files = [f for f in files if f.path not in handled_paths]
 
-        org_records = organizer.plan_organization(remaining_files, dest_dir, strategy=strategy)
+        org_records = organizer.plan_organization(
+            remaining_files,
+            dest_dir,
+            strategy=strategy,
+            smart_receipts=parsed_args.smart_receipts
+        )
         all_records.extend(org_records)
 
     if not all_records:
