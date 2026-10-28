@@ -32,6 +32,8 @@ from .doctor import SFODoctor, DiagnosticItem
 from .i18n import I18n, _t
 from .tray_daemon import WindowsStartupManager, DesktopNotifier
 from .scheduler import WindowsTaskScheduler
+from .shredder import FileShredder, ShredMethod, ShredResult, ShredBatchResult
+from .vault import VaultEngine, VaultManager, VaultMetadata, VaultError, InvalidPasswordError, CorruptedVaultError, VaultProtectionError
 
 __all__ = [
     "FileInfo",
@@ -87,4 +89,15 @@ __all__ = [
     "WindowsStartupManager",
     "DesktopNotifier",
     "WindowsTaskScheduler",
+    "FileShredder",
+    "ShredMethod",
+    "ShredResult",
+    "ShredBatchResult",
+    "VaultEngine",
+    "VaultManager",
+    "VaultMetadata",
+    "VaultError",
+    "InvalidPasswordError",
+    "CorruptedVaultError",
+    "VaultProtectionError",
 ]

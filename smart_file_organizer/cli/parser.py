@@ -204,6 +204,53 @@ Examples:
         help="Remove Smart File Organizer from Windows Explorer right-click menu"
     )
 
+    # Military-Grade Secure Shredder & Encrypted Vault
+    parser.add_argument(
+        "--shred",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Permanently destroy a file or directory using DoD 5220.22-M multi-pass overwriting"
+    )
+    parser.add_argument(
+        "--shred-method",
+        choices=["dod_3pass", "quick_1pass", "nist_800_88", "gutmann_7pass"],
+        default="dod_3pass",
+        help="Data wiping algorithm (default: dod_3pass)"
+    )
+    parser.add_argument(
+        "--vault-lock",
+        type=str,
+        default=None,
+        metavar="SOURCE_PATH",
+        help="Encrypt and pack file or folder into an AES-256-GCM .sfovault container"
+    )
+    parser.add_argument(
+        "--vault-unlock",
+        type=str,
+        default=None,
+        metavar="VAULT_FILE",
+        help="Decrypt and extract an .sfovault container to destination directory"
+    )
+    parser.add_argument(
+        "--vault-inspect",
+        type=str,
+        default=None,
+        metavar="VAULT_FILE",
+        help="List files inside an .sfovault container without extracting to disk"
+    )
+    parser.add_argument(
+        "--vault-pass",
+        type=str,
+        default=None,
+        help="Passphrase for vault encryption/decryption (prompted if omitted)"
+    )
+    parser.add_argument(
+        "--vault-shred-source",
+        action="store_true",
+        help="Execute military-grade DoD shredding of original files after locking into vault"
+    )
+
     # Cold Storage & Auto-Archive
     parser.add_argument(
         "--archive-cold",

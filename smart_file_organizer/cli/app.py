@@ -33,6 +33,8 @@ from ..core.doctor import SFODoctor
 from ..core.i18n import I18n, _t
 from ..core.tray_daemon import WindowsStartupManager, DesktopNotifier
 from ..core.scheduler import WindowsTaskScheduler
+from ..core.shredder import FileShredder, ShredMethod
+from ..core.vault import VaultManager, VaultError, InvalidPasswordError, CorruptedVaultError
 from ..core.models import OrganizeStrategy, ActionType, SyncProfile, SyncMode
 
 
@@ -278,6 +280,126 @@ def run_cli(args: Optional[List[str]] = None) -> int:
             server.stop()
             print_info("\nLAN Drop server stopped.")
             return 0
+
+    # 2k. Military-Grade Secure Shredder
+    if parsed_args.shred:
+        import getpass
+        target_path = Path(parsed_args.shred).resolve()
+        if not target_path.exists():
+            print_error(f"Target path to shred does not exist: {target_path}")
+            return 1
+
+        method = ShredMethod(parsed_args.shred_method)
+        print_warning("=" * 65)
+        print_warning("  [!] MILITARY-GRADE UNRECOVERABLE DATA SHREDDING")
+        print_warning(f"  Target: {target_path}")
+        print_warning(f"  Method: {method.value.upper()} (Physical byte overwriting & unlinking)")
+        print_warning("=" * 65)
+
+        audit_chain = AuditLogChain()
+        if target_path.is_file():
+            print_info(f"Overwriting and shredding file: {target_path.name}...")
+            res = FileShredder.shred_file(target_path, method=method, audit_chain=audit_chain)
+            if res.success:
+                print_success(f"File successfully shredded and destroyed in {res.duration_seconds}s.")
+                return 0
+            else:
+                print_error(f"Shredding failed: {res.error_message}")
+                return 1
+        elif target_path.is_dir():
+            print_info(f"Recursively shredding directory tree: {target_path}...")
+            batch_res = FileShredder.shred_directory(target_path, method=method, audit_chain=audit_chain)
+            print_success(f"Directory shredding complete: {len(batch_res.shredded_files)} file(s) destroyed in {batch_res.duration_seconds}s.")
+            if batch_res.failed_files:
+                print_warning(f"Failed to shred {len(batch_res.failed_files)} file(s).")
+                for f, err in batch_res.failed_files:
+                    print_error(f"  - {f}: {err}")
+            return 0 if batch_res.success_rate == 100.0 else 1
+
+    # 2l. Cryptographic Encrypted Vault
+    if parsed_args.vault_lock:
+        import getpass
+        src = Path(parsed_args.vault_lock).resolve()
+        if not src.exists():
+            print_error(f"Source path to lock into vault does not exist: {src}")
+            return 1
+
+        dst = Path(parsed_args.dest).resolve() if parsed_args.dest else src.with_suffix(".sfovault")
+        pwd = parsed_args.vault_pass
+        if not pwd:
+            pwd = getpass.getpass("Enter Vault Encryption Passphrase: ")
+            confirm = getpass.getpass("Confirm Vault Passphrase: ")
+            if pwd != confirm:
+                print_error("Passphrases do not match. Vault operation aborted.")
+                return 1
+
+        print_info(f"Locking {src} into encrypted vault: {dst}...")
+        audit_chain = AuditLogChain()
+        try:
+            vault_file = VaultManager.lock_path(
+                src, dst, pwd,
+                shred_source=parsed_args.vault_shred_source,
+                audit_chain=audit_chain
+            )
+            print_success(f"Vault successfully locked: {vault_file} ({Reporter.format_bytes(vault_file.stat().st_size)})")
+            if parsed_args.vault_shred_source:
+                print_success("Source file(s) securely shredded with DoD 5220.22-M.")
+            return 0
+        except Exception as e:
+            print_error(f"Vault locking failed: {e}")
+            return 1
+
+    if parsed_args.vault_unlock:
+        import getpass
+        vault_file = Path(parsed_args.vault_unlock).resolve()
+        if not vault_file.exists():
+            print_error(f"Vault file does not exist: {vault_file}")
+            return 1
+
+        dest_dir = Path(parsed_args.dest).resolve() if parsed_args.dest else Path.cwd()
+        pwd = parsed_args.vault_pass
+        if not pwd:
+            pwd = getpass.getpass("Enter Vault Decryption Passphrase: ")
+
+        print_info(f"Unlocking vault {vault_file.name} into {dest_dir}...")
+        audit_chain = AuditLogChain()
+        try:
+            extracted = VaultManager.unlock_vault(vault_file, dest_dir, pwd, audit_chain=audit_chain)
+            print_success(f"Vault unlocked successfully! Extracted {len(extracted)} file(s) into {dest_dir}.")
+            return 0
+        except InvalidPasswordError:
+            print_error("Invalid passphrase! Authentication failed.")
+            return 1
+        except Exception as e:
+            print_error(f"Vault unlocking failed: {e}")
+            return 1
+
+    if parsed_args.vault_inspect:
+        import getpass
+        vault_file = Path(parsed_args.vault_inspect).resolve()
+        if not vault_file.exists():
+            print_error(f"Vault file does not exist: {vault_file}")
+            return 1
+
+        pwd = parsed_args.vault_pass
+        if not pwd:
+            pwd = getpass.getpass("Enter Vault Passphrase: ")
+
+        try:
+            meta = VaultManager.inspect_vault(vault_file, pwd)
+            print_success(f"Vault Container: {vault_file.name}")
+            print_info(f"Total Files: {meta.file_count} | Uncompressed Payload: {Reporter.format_bytes(meta.total_uncompressed_bytes)}")
+            print("-" * 65)
+            for item in meta.files:
+                print(f"  - {item['filename']:<40} {Reporter.format_bytes(item['file_size']):>10}  {item['date_time']}")
+            print("-" * 65)
+            return 0
+        except InvalidPasswordError:
+            print_error("Invalid passphrase! Authentication failed.")
+            return 1
+        except Exception as e:
+            print_error(f"Vault inspection failed: {e}")
+            return 1
 
     # 2k. SFO Doctor Diagnostics
     if parsed_args.doctor:

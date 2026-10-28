@@ -34,6 +34,8 @@ from ..core.doctor import SFODoctor
 from ..core.i18n import I18n, _t
 from ..core.tray_daemon import WindowsStartupManager, DesktopNotifier
 from ..core.scheduler import WindowsTaskScheduler
+from ..core.shredder import FileShredder, ShredMethod
+from ..core.vault import VaultManager, VaultError, InvalidPasswordError, CorruptedVaultError
 from ..core.models import (
     OrganizeStrategy, ActionRecord, DuplicateGroup,
     VisualDuplicateGroup, SyncProfile, SyncMode, FileInfo
@@ -666,9 +668,13 @@ class SmartFileOrganizerApp(tk.Tk):
 
         tab_junk = ttk.Frame(notebook_sec, padding=10)
         tab_secrets = ttk.Frame(notebook_sec, padding=10)
+        tab_shredder = ttk.Frame(notebook_sec, padding=10)
+        tab_vault = ttk.Frame(notebook_sec, padding=10)
 
         notebook_sec.add(tab_junk, text="  🧹 Dev Junk Cleaner  ")
         notebook_sec.add(tab_secrets, text="  🛡️ Secret Scanner (DLP)  ")
+        notebook_sec.add(tab_shredder, text="  🔥 Secure File Shredder  ")
+        notebook_sec.add(tab_vault, text="  🔒 Encrypted Vault  ")
 
         # --- JUNK PANEL ---
         panel_j = ttk.Frame(tab_junk, style="Card.TFrame", padding=12)
@@ -719,6 +725,98 @@ class SmartFileOrganizerApp(tk.Tk):
         self.secret_table = ScrollableTreeview(tab_secrets, cols_s, heads_s)
         self.secret_table.pack(fill="both", expand=True)
         self.discovered_secrets: List[SecretFinding] = []
+
+        # --- SHREDDER PANEL ---
+        panel_shred = ttk.Frame(tab_shredder, style="Card.TFrame", padding=14)
+        panel_shred.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(panel_shred, text="Military-Grade Irreversible Data Erasure", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 4))
+        ttk.Label(panel_shred, text="Overwrites physical sectors with DoD 5220.22-M 3-pass patterns and zeroes NTFS MFT metadata.", style="Muted.TLabel").pack(anchor="w", pady=(0, 10))
+
+        row_shred_target = ttk.Frame(panel_shred, style="Card.TFrame")
+        row_shred_target.pack(fill="x", pady=(0, 8))
+        ttk.Label(row_shred_target, text="Target Path: ", width=14).pack(side="left")
+        self.shred_path_entry = ttk.Entry(row_shred_target)
+        self.shred_path_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ttk.Button(row_shred_target, text="File...", width=8, command=self._on_shred_browse_file).pack(side="left", padx=(0, 4))
+        ttk.Button(row_shred_target, text="Folder...", width=8, command=self._on_shred_browse_folder).pack(side="left")
+
+        row_shred_opts = ttk.Frame(panel_shred, style="Card.TFrame")
+        row_shred_opts.pack(fill="x", pady=(0, 10))
+        ttk.Label(row_shred_opts, text="Wiping Standard: ", width=14).pack(side="left")
+        self.shred_method_combo = ttk.Combobox(
+            row_shred_opts,
+            values=["DoD 5220.22-M (3-Pass: 0x00, 0xFF, Random)", "Quick Wipe (1-Pass: Random)", "NIST SP 800-88 (2-Pass)", "Gutmann (7-Pass High-Security)"],
+            state="readonly",
+            width=42
+        )
+        self.shred_method_combo.current(0)
+        self.shred_method_combo.pack(side="left")
+
+        btn_shred = ttk.Button(row_shred_opts, text="🔥 Permanently Shred Target", style="Danger.TButton", command=self._on_shred_execute)
+        btn_shred.pack(side="right")
+
+        self.shred_status_var = tk.StringVar(value="WARNING: Shredded files CANNOT be recovered by any undelete or recovery software.")
+        ttk.Label(tab_shredder, textvariable=self.shred_status_var, style="Warning.TLabel").pack(anchor="w", padx=4, pady=4)
+
+        # --- VAULT PANEL ---
+        panel_vault = ttk.Frame(tab_vault, style="Card.TFrame", padding=14)
+        panel_vault.pack(fill="both", expand=True)
+
+        ttk.Label(panel_vault, text="AES-256-GCM Cryptographic Local Vault (.sfovault)", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 4))
+        ttk.Label(panel_vault, text="Lock and encrypt confidential documents with PBKDF2 (100,000 rounds) and authenticated cipher.", style="Muted.TLabel").pack(anchor="w", pady=(0, 10))
+
+        # Vault Lock Section
+        lbl_lock = ttk.Label(panel_vault, text="[1] Lock File or Folder into Vault", font=("Segoe UI", 9, "bold"))
+        lbl_lock.pack(anchor="w", pady=(4, 2))
+
+        row_vsrc = ttk.Frame(panel_vault, style="Card.TFrame")
+        row_vsrc.pack(fill="x", pady=2)
+        ttk.Label(row_vsrc, text="Source to Lock: ", width=16).pack(side="left")
+        self.vault_lock_src_entry = ttk.Entry(row_vsrc)
+        self.vault_lock_src_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ttk.Button(row_vsrc, text="Browse...", width=10, command=self._on_vault_lock_browse).pack(side="left")
+
+        row_vpwd = ttk.Frame(panel_vault, style="Card.TFrame")
+        row_vpwd.pack(fill="x", pady=2)
+        ttk.Label(row_vpwd, text="Passphrase: ", width=16).pack(side="left")
+        self.vault_lock_pwd_entry = ttk.Entry(row_vpwd, show="*")
+        self.vault_lock_pwd_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        self.vault_shred_source_var = tk.BooleanVar(value=False)
+        chk_shred_src = ttk.Checkbutton(row_vpwd, text="DoD Shred original after locking", variable=self.vault_shred_source_var)
+        chk_shred_src.pack(side="left", padx=(0, 10))
+
+        btn_lock_v = ttk.Button(row_vpwd, text="🔒 Lock into Vault", style="Primary.TButton", command=self._on_vault_lock_execute)
+        btn_lock_v.pack(side="right")
+
+        ttk.Separator(panel_vault, orient="horizontal").pack(fill="x", pady=12)
+
+        # Vault Unlock Section
+        lbl_unlock = ttk.Label(panel_vault, text="[2] Unlock and Extract Vault Container", font=("Segoe UI", 9, "bold"))
+        lbl_unlock.pack(anchor="w", pady=(4, 2))
+
+        row_vdst = ttk.Frame(panel_vault, style="Card.TFrame")
+        row_vdst.pack(fill="x", pady=2)
+        ttk.Label(row_vdst, text="Vault (.sfovault): ", width=16).pack(side="left")
+        self.vault_unlock_file_entry = ttk.Entry(row_vdst)
+        self.vault_unlock_file_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        ttk.Button(row_vdst, text="Browse...", width=10, command=self._on_vault_unlock_browse).pack(side="left")
+
+        row_vupwd = ttk.Frame(panel_vault, style="Card.TFrame")
+        row_vupwd.pack(fill="x", pady=2)
+        ttk.Label(row_vupwd, text="Passphrase: ", width=16).pack(side="left")
+        self.vault_unlock_pwd_entry = ttk.Entry(row_vupwd, show="*")
+        self.vault_unlock_pwd_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        btn_inspect_v = ttk.Button(row_vupwd, text="📋 Inspect", style="Secondary.TButton", command=self._on_vault_inspect_execute)
+        btn_inspect_v.pack(side="left", padx=(0, 6))
+
+        btn_unlock_v = ttk.Button(row_vupwd, text="🔓 Unlock Vault", style="Primary.TButton", command=self._on_vault_unlock_execute)
+        btn_unlock_v.pack(side="right")
+
+        self.vault_status_var = tk.StringVar(value="Zero-Knowledge authenticated encryption. Forgotten passwords cannot be recovered.")
+        ttk.Label(panel_vault, textvariable=self.vault_status_var, style="Muted.TLabel").pack(anchor="w", pady=(10, 0))
 
     def _on_scan_junk(self) -> None:
         target = Path(self.junk_picker.get_path())
@@ -789,6 +887,185 @@ class SmartFileOrganizerApp(tk.Tk):
         res = SecretScanner.quarantine_files(self.discovered_secrets, target)
         self._on_scan_secrets()
         messagebox.showinfo("Quarantine Finished", res["message"])
+
+    def _on_shred_browse_file(self) -> None:
+        from tkinter import filedialog
+        p = filedialog.askopenfilename(title="Select File to Permanently Shred")
+        if p:
+            self.shred_path_entry.delete(0, tk.END)
+            self.shred_path_entry.insert(0, p)
+
+    def _on_shred_browse_folder(self) -> None:
+        from tkinter import filedialog
+        p = filedialog.askdirectory(title="Select Folder to Permanently Shred")
+        if p:
+            self.shred_path_entry.delete(0, tk.END)
+            self.shred_path_entry.insert(0, p)
+
+    def _on_shred_execute(self) -> None:
+        path_str = self.shred_path_entry.get().strip()
+        if not path_str:
+            messagebox.showwarning("Notice", "Please select a target file or folder to shred.")
+            return
+
+        target = Path(path_str).resolve()
+        if not target.exists():
+            messagebox.showerror("Error", f"Target path does not exist:\n{target}")
+            return
+
+        method_map = {
+            0: ShredMethod.DOD_3PASS,
+            1: ShredMethod.QUICK_1PASS,
+            2: ShredMethod.NIST_800_88,
+            3: ShredMethod.GUTMANN_7PASS
+        }
+        method = method_map.get(self.shred_method_combo.current(), ShredMethod.DOD_3PASS)
+
+        confirm = messagebox.askyesno(
+            "CRITICAL: Confirm Permanent Erasure",
+            f"Are you ABSOLUTELY sure you want to shred:\n\n{target}\n\n"
+            f"Wiping Standard: {method.value.upper()}\n\n"
+            "This will overwrite all physical sectors and destroy NTFS MFT entries. "
+            "Data CANNOT be recovered by any forensic software!",
+            icon="warning"
+        )
+        if not confirm:
+            return
+
+        audit_chain = AuditLogChain()
+        try:
+            if target.is_file():
+                res = FileShredder.shred_file(target, method=method, audit_chain=audit_chain)
+                if res.success:
+                    self.shred_status_var.set(f"Successfully shredded {target.name} ({res.original_size} bytes) in {res.duration_seconds}s.")
+                    messagebox.showinfo("Erasure Complete", f"File '{target.name}' has been permanently wiped from disk.")
+                    self.shred_path_entry.delete(0, tk.END)
+                else:
+                    messagebox.showerror("Shred Failed", res.error_message)
+            else:
+                batch_res = FileShredder.shred_directory(target, method=method, audit_chain=audit_chain)
+                self.shred_status_var.set(f"Shredded {len(batch_res.shredded_files)} files in {batch_res.duration_seconds}s.")
+                messagebox.showinfo("Erasure Complete", f"Directory permanently erased ({len(batch_res.shredded_files)} files).")
+                self.shred_path_entry.delete(0, tk.END)
+        except Exception as e:
+            messagebox.showerror("Error", f"Shredding blocked or failed:\n{e}")
+
+    def _on_vault_lock_browse(self) -> None:
+        from tkinter import filedialog
+        p = filedialog.askdirectory(title="Select Folder to Lock into Vault")
+        if not p:
+            p = filedialog.askopenfilename(title="Or Select File to Lock into Vault")
+        if p:
+            self.vault_lock_src_entry.delete(0, tk.END)
+            self.vault_lock_src_entry.insert(0, p)
+
+    def _on_vault_lock_execute(self) -> None:
+        from tkinter import filedialog
+        src_str = self.vault_lock_src_entry.get().strip()
+        pwd = self.vault_lock_pwd_entry.get()
+        if not src_str or not pwd:
+            messagebox.showwarning("Notice", "Please specify both source path and passphrase.")
+            return
+
+        src = Path(src_str).resolve()
+        if not src.exists():
+            messagebox.showerror("Error", f"Source path does not exist:\n{src}")
+            return
+
+        default_dst = src.with_suffix(".sfovault")
+        vault_dst_str = filedialog.asksaveasfilename(
+            title="Save Vault Container As",
+            initialdir=str(src.parent),
+            initialfile=default_dst.name,
+            filetypes=[("SFO Vault Container", "*.sfovault"), ("All Files", "*.*")]
+        )
+        if not vault_dst_str:
+            return
+
+        shred_src = self.vault_shred_source_var.get()
+        audit_chain = AuditLogChain()
+        try:
+            vault_file = VaultManager.lock_path(src, vault_dst_str, pwd, shred_source=shred_src, audit_chain=audit_chain)
+            size_fmt = Reporter.format_bytes(vault_file.stat().st_size)
+            self.vault_status_var.set(f"Vault locked: {vault_file.name} ({size_fmt})")
+            msg = f"Vault successfully created:\n{vault_file}\nSize: {size_fmt}"
+            if shred_src:
+                msg += "\n\nOriginal source files were securely wiped with DoD 3-Pass."
+            messagebox.showinfo("Vault Locked", msg)
+            self.vault_lock_src_entry.delete(0, tk.END)
+            self.vault_lock_pwd_entry.delete(0, tk.END)
+        except Exception as e:
+            messagebox.showerror("Vault Error", f"Failed to lock vault:\n{e}")
+
+    def _on_vault_unlock_browse(self) -> None:
+        from tkinter import filedialog
+        p = filedialog.askopenfilename(
+            title="Select SFO Vault File to Unlock",
+            filetypes=[("SFO Vault Container", "*.sfovault"), ("All Files", "*.*")]
+        )
+        if p:
+            self.vault_unlock_file_entry.delete(0, tk.END)
+            self.vault_unlock_file_entry.insert(0, p)
+
+    def _on_vault_unlock_execute(self) -> None:
+        from tkinter import filedialog
+        v_str = self.vault_unlock_file_entry.get().strip()
+        pwd = self.vault_unlock_pwd_entry.get()
+        if not v_str or not pwd:
+            messagebox.showwarning("Notice", "Please specify both vault container and passphrase.")
+            return
+
+        vault_file = Path(v_str).resolve()
+        if not vault_file.exists():
+            messagebox.showerror("Error", f"Vault file not found:\n{vault_file}")
+            return
+
+        dest_dir = filedialog.askdirectory(title="Select Destination Folder for Unlocked Files", initialdir=str(vault_file.parent))
+        if not dest_dir:
+            return
+
+        audit_chain = AuditLogChain()
+        try:
+            extracted = VaultManager.unlock_vault(vault_file, dest_dir, pwd, audit_chain=audit_chain)
+            self.vault_status_var.set(f"Unlocked {len(extracted)} files into: {dest_dir}")
+            messagebox.showinfo("Vault Unlocked", f"Successfully decrypted and extracted {len(extracted)} file(s) into:\n{dest_dir}")
+            self.vault_unlock_pwd_entry.delete(0, tk.END)
+        except InvalidPasswordError:
+            messagebox.showerror("Authentication Failed", "Incorrect passphrase or vault data has been tampered with!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to unlock vault:\n{e}")
+
+    def _on_vault_inspect_execute(self) -> None:
+        v_str = self.vault_unlock_file_entry.get().strip()
+        pwd = self.vault_unlock_pwd_entry.get()
+        if not v_str or not pwd:
+            messagebox.showwarning("Notice", "Please specify both vault container and passphrase to inspect.")
+            return
+
+        vault_file = Path(v_str).resolve()
+        if not vault_file.exists():
+            messagebox.showerror("Error", f"Vault file not found:\n{vault_file}")
+            return
+
+        try:
+            meta = VaultManager.inspect_vault(vault_file, pwd)
+            lines = [
+                f"Vault Container: {vault_file.name}",
+                f"File Count: {meta.file_count}",
+                f"Uncompressed Payload: {Reporter.format_bytes(meta.total_uncompressed_bytes)}",
+                "",
+                "Files contained:"
+            ]
+            for item in meta.files[:20]:
+                lines.append(f"  • {item['filename']} ({Reporter.format_bytes(item['file_size'])})")
+            if len(meta.files) > 20:
+                lines.append(f"  ... and {len(meta.files) - 20} more files.")
+
+            messagebox.showinfo("Vault Inspection", "\n".join(lines))
+        except InvalidPasswordError:
+            messagebox.showerror("Authentication Failed", "Incorrect passphrase or vault data has been tampered with!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to inspect vault:\n{e}")
     def _build_sync_tab(self) -> None:
         notebook_sync = ttk.Notebook(self.tab_sync)
         notebook_sync.pack(fill="both", expand=True)

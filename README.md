@@ -2,7 +2,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Status](https://img.shields.io/badge/tests-57%2F57%20passed-success.svg)](tests/)
+[![Tests Status](https://img.shields.io/badge/tests-71%2F71%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Clean%20%2F%20Zero--Dependency-orange.svg)](docs/ARCHITECTURE.md)
 
 **Smart File Organizer (SFO)** is a robust, enterprise-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, analyze, wirelessly transfer, and optimize your file system safely and efficiently.
@@ -56,6 +56,15 @@ Featuring an intuitive **Modern Dark Theme Desktop GUI (9 Dedicated Tabs)** and 
   - Fast recursive disk usage analysis displaying space breakdown across directories.
   - Interactive 2D slice-and-dice treemap visualization in the GUI.
   - Instant discovery of top storage-eating files consuming gigabytes of disk space.
+
+- 🔥 **Military-Grade Secure File Shredder (`sfo --shred <path>`):**
+  - Permanent, unrecoverable data wiping adhering to **DoD 5220.22-M (3-Pass)**, NIST SP 800-88, and Gutmann (7-Pass) standards.
+  - Multi-pass binary overwriting (`0x00`, `0xFF`, cryptographically secure pseudo-random bytes), physical disk flush (`os.fsync`), 0-byte truncation, and filename MFT obfuscation before unlinking.
+  - Built-in Enterprise Guardrail protection blocking accidental erasure of Windows/System directories.
+
+- 🔒 **Cryptographic Encrypted Vault (`sfo --vault-lock`, `sfo --vault-unlock`):**
+  - Zero-knowledge AES-256-GCM / PBKDF2 (100,000 rounds) container (`.sfovault`) protecting confidential documents, tax forms, and source archives.
+  - Authenticated symmetric cipher verifying data integrity with tamper detection; optional automated post-encryption DoD source file shredding.
 
 - 🧹 **Developer Bloat & Junk Cleaner:**
   - Scans for abandoned and inactive `node_modules`, Python `.venv`, `__pycache__`, and build artifact directories.
@@ -394,10 +403,22 @@ tests/test_treemap.py::test_treemap_layout_coordinates PASSED            [ 91%]
 tests/test_find_largest_files PASSED                                    [ 92%]
 tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 94%]
 tests/test_undo.py::test_undo_prune_and_rename_rollback PASSED           [ 96%]
+tests/test_shredder.py::test_shred_single_file_dod_3pass PASSED          [ 62%]
+tests/test_shredder.py::test_shred_single_file_quick_1pass PASSED        [ 63%]
+tests/test_shredder.py::test_shred_empty_file PASSED                     [ 65%]
+tests/test_shredder.py::test_shred_directory_recursive PASSED            [ 66%]
+tests/test_shredder.py::test_shred_guardrails_blocks_protected_path PASSED [ 68%]
+tests/test_shredder.py::test_shred_nonexistent_file_raises PASSED        [ 69%]
+tests/test_vault.py::test_vault_lock_and_unlock_single_file PASSED       [ 90%]
+tests/test_vault.py::test_vault_lock_and_unlock_directory_tree PASSED    [ 91%]
+tests/test_vault.py::test_vault_wrong_password_raises PASSED             [ 92%]
+tests/test_vault.py::test_vault_tampered_ciphertext_detection PASSED     [ 94%]
+tests/test_vault.py::test_vault_inspect_contents_without_extracting PASSED [ 95%]
+tests/test_vault.py::test_vault_shred_source_option PASSED               [ 97%]
 tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 98%]
 tests/test_visual_hasher.py::test_visual_similarity_clustering PASSED    [100%]
 
-============================= 57 passed in 2.25s ==============================
+============================= 71 passed in 3.04s ==============================
 ```
 
 ---
