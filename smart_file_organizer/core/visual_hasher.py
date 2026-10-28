@@ -1,26 +1,37 @@
 """
 Perceptual Hashing (dHash) and Visual Image Similarity Engine.
+Enhanced with EXIF orientation auto-transpose, multi-threaded parallel hashing,
+and fast similarity clustering.
 """
 
+import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional, Tuple, Set
 from .models import FileInfo, VisualDuplicateGroup
 
 
 class PerceptualHasher:
-    """Computes 64-bit difference hash (dHash) to identify visually similar images."""
+    """Computes difference hash (dHash) and average hash (aHash) for visual similarity."""
 
     @staticmethod
     def compute_dhash(image_path: Path) -> Optional[int]:
         """
         Calculates 64-bit difference hash for an image:
-        1. Downsample to 9x8 grayscale
-        2. Compare adjacent horizontal pixel brightness
-        3. Returns 64-bit unsigned integer
+        1. Auto-transpose EXIF orientation (portrait vs landscape)
+        2. Downsample to 9x8 grayscale
+        3. Compare adjacent horizontal pixel brightness
+        4. Returns 64-bit unsigned integer
         """
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps
             with Image.open(image_path) as img:
+                # Auto-transpose based on EXIF tag to normalize orientation
+                try:
+                    img = ImageOps.exif_transpose(img) or img
+                except Exception:
+                    pass
+
                 # Convert to grayscale and resize to 9x8 using Box/Bilinear
                 gray = img.convert("L").resize((9, 8), Image.Resampling.BOX)
                 pixels = list(gray.tobytes())
@@ -33,6 +44,27 @@ class PerceptualHasher:
                         if left > right:
                             difference |= 1 << (row * 8 + col)
                 return difference
+        except Exception:
+            return None
+
+    @staticmethod
+    def compute_ahash(image_path: Path) -> Optional[int]:
+        """Computes 64-bit average hash (aHash) for brightness distribution."""
+        try:
+            from PIL import Image, ImageOps
+            with Image.open(image_path) as img:
+                try:
+                    img = ImageOps.exif_transpose(img) or img
+                except Exception:
+                    pass
+                gray = img.convert("L").resize((8, 8), Image.Resampling.BOX)
+                pixels = list(gray.tobytes())
+                avg = sum(pixels) / len(pixels)
+                hash_val = 0
+                for i, p in enumerate(pixels):
+                    if p >= avg:
+                        hash_val |= 1 << i
+                return hash_val
         except Exception:
             return None
 
@@ -63,16 +95,21 @@ class VisualSimilarityEngine:
         if len(image_files) < 2:
             return []
 
-        # 1. Compute perceptual hashes for all images
+        # 1. Compute perceptual hashes concurrently
         hashes: Dict[Path, int] = {}
-        for f in image_files:
-            h = PerceptualHasher.compute_dhash(f.path)
-            if h is not None:
-                hashes[f.path] = h
+        workers = min(16, (os.cpu_count() or 4) * 2)
 
-        # 2. Compare pairs and build connected clusters
+        def _hash_worker(f: FileInfo) -> Tuple[Path, Optional[int]]:
+            return f.path, PerceptualHasher.compute_dhash(f.path)
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            for path, h in executor.map(_hash_worker, image_files):
+                if h is not None:
+                    hashes[path] = h
+
+        # 2. Build similarity clusters
         clusters: List[List[FileInfo]] = []
-        visited: set = set()
+        visited: Set[Path] = set()
 
         for i, f1 in enumerate(image_files):
             if f1.path not in hashes or f1.path in visited:
@@ -100,6 +137,22 @@ class VisualSimilarityEngine:
         results: List[VisualDuplicateGroup] = []
         for cluster in clusters:
             best_file = max(cluster, key=lambda f: (f.size_bytes, f.path.name))
+            # Try to pick best resolution if Pillow is installed
+            try:
+                from PIL import Image
+                max_pixels = -1
+                for f in cluster:
+                    try:
+                        with Image.open(f.path) as img:
+                            pixels = img.width * img.height
+                            if pixels > max_pixels:
+                                max_pixels = pixels
+                                best_file = f
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
             primary_hash = hex(hashes[best_file.path])[2:].zfill(16)
 
             # Calculate average similarity in group
@@ -107,7 +160,7 @@ class VisualSimilarityEngine:
             if len(cluster) > 1:
                 sims = [
                     PerceptualHasher.similarity(hashes[best_file.path], hashes[f.path])
-                    for f in cluster if f != best_file
+                    for f in cluster if f != best_file and f.path in hashes
                 ]
                 avg_sim = sum(sims) / len(sims) if sims else 1.0
 

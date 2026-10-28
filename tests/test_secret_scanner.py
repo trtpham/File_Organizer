@@ -44,3 +44,26 @@ def test_quarantine_leaked_file(temp_workspace):
     # Original file is moved
     assert not key_file.exists()
     assert (temp_workspace / "_Quarantine" / "id_rsa.quarantined").exists()
+
+
+def test_shannon_entropy_and_extended_tokens(temp_workspace):
+    # Test entropy function
+    low_entropy = SecretScanner.calculate_shannon_entropy("aaaaaaaaaa")
+    high_entropy = SecretScanner.calculate_shannon_entropy("a8!Zq9#vLm2$xP0@")
+    assert high_entropy > low_entropy
+    assert low_entropy == 0.0
+
+    # Test Slack and Stripe token detection (dynamically assembled to avoid git push false positives)
+    mock_slack = "xoxb" + "-123456789012-123456789012-" + "abcdefghijklmnopqrstuvwx"
+    mock_stripe = "sk_" + "live_1234567890abcdefghijklmnopqrstuv"
+    token_file = temp_workspace / "tokens.txt"
+    token_file.write_text(
+        f"SLACK={mock_slack}\n"
+        f"STRIPE={mock_stripe}\n"
+    )
+
+    findings = SecretScanner.scan_file(token_file)
+    assert len(findings) == 2
+    types = {f.secret_type for f in findings}
+    assert "Slack Token" in types
+    assert "Stripe Secret Key" in types

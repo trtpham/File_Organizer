@@ -1,6 +1,7 @@
 """
 Interactive Disk Space Treemap and Storage Analyzer.
-Computes recursive directory hierarchies and calculates 2D treemap layouts.
+Computes recursive directory hierarchies and calculates hierarchical 2D treemap layouts.
+Enhanced with multi-level recursive child layout and storage projection metrics.
 """
 
 import os
@@ -70,7 +71,6 @@ class DiskAnalyzer:
                             child.size = dir_size
                             node.children.append(child)
                         else:
-                            # Leaf directory beyond max_depth, calculate total size quickly
                             dir_size = cls._quick_dir_size(entry_path)
                             child.size = dir_size
                             node.children.append(child)
@@ -81,7 +81,6 @@ class DiskAnalyzer:
             pass
 
         node.size = total_size
-        # Sort children largest first
         node.children.sort(key=lambda c: c.size, reverse=True)
         return total_size
 
@@ -98,14 +97,20 @@ class DiskAnalyzer:
 
     @classmethod
     def find_largest_files(cls, root_dir: Path, limit: int = 20) -> List[Dict[str, Any]]:
-        """Finds top N largest files in root_dir."""
+        """Scans directory and returns ranked list of largest files."""
         files = []
-        for root, _, filenames in os.walk(root_dir):
+        root_path = Path(root_dir).resolve()
+        for root, _, filenames in os.walk(root_path):
             for f in filenames:
                 file_path = Path(root) / f
                 try:
-                    size = file_path.stat().st_size
-                    files.append({"name": f, "path": str(file_path), "size": size})
+                    stat = file_path.stat()
+                    files.append({
+                        "name": f,
+                        "path": str(file_path),
+                        "size": stat.st_size,
+                        "size_mb": stat.st_size / (1024 * 1024)
+                    })
                 except OSError:
                     pass
 
@@ -120,10 +125,12 @@ class DiskAnalyzer:
         y1: float,
         x2: float,
         y2: float,
-        color_idx: int = 0
+        color_idx: int = 0,
+        recursive: bool = True
     ) -> None:
         """
-        Calculates slice-and-dice layout for direct children inside bounding box (x1, y1, x2, y2).
+        Calculates slice-and-dice layout for children inside bounding box (x1, y1, x2, y2).
+        If recursive=True, also computes layouts for nested directory children.
         """
         node.rect = (x1, y1, x2, y2)
         if not node.children or node.size <= 0:
@@ -162,3 +169,12 @@ class DiskAnalyzer:
                 cy2 = current_offset + child_h
                 child.rect = (cx1, cy1, cx2, cy2)
                 current_offset += child_h
+
+            # Recursively layout children inside child bounding box if requested and node is a directory
+            if recursive and child.is_dir and child.children:
+                cls.layout_treemap(
+                    child,
+                    child.rect[0], child.rect[1], child.rect[2], child.rect[3],
+                    color_idx=color_idx + idx + 1,
+                    recursive=False
+                )

@@ -1,10 +1,11 @@
 """
 Directory scanner with filtering and metadata extraction.
+Enhanced with symlink loop protection, depth limiting, and optimized stat gathering.
 """
 
 import os
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Set, Tuple
 from .models import FileInfo
 from .config import ConfigManager
 
@@ -20,7 +21,8 @@ class FileScanner:
         source_dir: Path,
         recursive: bool = False,
         exclude_dirs: Optional[List[Path]] = None,
-        progress_callback: Optional[Callable[[int, str], None]] = None
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+        max_depth: Optional[int] = None
     ) -> List[FileInfo]:
         """
         Scans source directory for files, applying ignore rules.
@@ -30,6 +32,7 @@ class FileScanner:
             recursive: If True, scans subdirectories; otherwise only immediate files.
             exclude_dirs: List of directories to completely skip.
             progress_callback: Optional callback receiving (scanned_count, current_filename).
+            max_depth: Optional maximum depth limit for recursive scans.
         """
         source_path = Path(source_dir).resolve()
         if not source_path.exists():
@@ -40,10 +43,29 @@ class FileScanner:
         resolved_excludes = [p.resolve() for p in (exclude_dirs or [])]
         discovered_files: List[FileInfo] = []
         count = 0
+        visited_dirs: Set[Tuple[int, int]] = set()
 
         if recursive:
-            for root, dirs, files in os.walk(source_path):
+            source_parts_len = len(source_path.parts)
+            for root, dirs, files in os.walk(source_path, followlinks=False):
                 current_dir = Path(root).resolve()
+
+                # Symlink loop protection
+                try:
+                    dir_stat = current_dir.stat()
+                    dir_key = (dir_stat.st_dev, dir_stat.st_ino)
+                    if dir_key in visited_dirs and dir_stat.st_ino != 0:
+                        dirs.clear()
+                        continue
+                    visited_dirs.add(dir_key)
+                except OSError:
+                    pass
+
+                # Depth limiting
+                if max_depth is not None:
+                    depth = len(current_dir.parts) - source_parts_len
+                    if depth >= max_depth:
+                        dirs.clear()
 
                 # Filter out excluded directories and ignored patterns in-place
                 dirs[:] = [
@@ -63,23 +85,22 @@ class FileScanner:
                         if progress_callback:
                             progress_callback(count, fname)
                     except (PermissionError, FileNotFoundError, OSError):
-                        # Gracefully skip files that cannot be accessed or are locked
                         continue
         else:
             try:
                 for entry in os.scandir(source_path):
-                    if entry.is_file(follow_symlinks=False):
-                        if self.config.is_ignored(entry.name):
-                            continue
-                        try:
+                    try:
+                        if entry.is_file(follow_symlinks=False):
+                            if self.config.is_ignored(entry.name):
+                                continue
                             file_info = FileInfo.from_path(Path(entry.path))
                             discovered_files.append(file_info)
                             count += 1
                             if progress_callback:
                                 progress_callback(count, entry.name)
-                        except (PermissionError, FileNotFoundError, OSError):
-                            continue
-            except PermissionError:
+                    except (PermissionError, FileNotFoundError, OSError):
+                        continue
+            except (PermissionError, OSError):
                 pass
 
         return discovered_files

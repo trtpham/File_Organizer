@@ -1,5 +1,6 @@
 """
 Journal recording and transactional undo / rollback engine.
+Enhanced with WAL SQLite mode, session pruning, and comprehensive rollback (Move, Deduplicate, Rename).
 """
 
 import json
@@ -7,7 +8,7 @@ import sqlite3
 import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from .models import SessionLog, ActionRecord, ActionType
 
 
@@ -24,8 +25,9 @@ class UndoManager:
         self._init_database()
 
     def _init_database(self) -> None:
-        """Initializes SQLite schema for session logs and action records."""
+        """Initializes SQLite schema with WAL journal mode for performance and durability."""
         with sqlite3.connect(self.db_path) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
@@ -140,7 +142,7 @@ class UndoManager:
     def rollback_session(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Reverses all successful operations from the specified or latest session.
-        Restores files to their exact original source paths.
+        Restores files to their exact original source paths (supports MOVE, DEDUPLICATE, and RENAME).
         """
         if not session_id:
             session = self.get_latest_session()
@@ -164,7 +166,8 @@ class UndoManager:
             if record.status != "SUCCESS":
                 continue
 
-            if record.action_type in (ActionType.MOVE, ActionType.DEDUPLICATE) and record.destination_path:
+            # Support rollback for MOVE, DEDUPLICATE, and RENAME
+            if record.action_type in (ActionType.MOVE, ActionType.DEDUPLICATE, ActionType.RENAME) and record.destination_path:
                 curr_path = record.destination_path
                 orig_path = record.source_path
 
@@ -205,3 +208,27 @@ class UndoManager:
             "errors": errors,
             "message": f"Restored {restored_count} files successfully."
         }
+
+    def prune_old_sessions(self, days: int = 30) -> int:
+        """Prunes historical sessions and journal files older than specified days."""
+        cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+        pruned = 0
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("SELECT session_id FROM sessions WHERE start_time < ?", (cutoff_date,))
+            session_ids = [r[0] for r in cursor.fetchall()]
+            if session_ids:
+                conn.execute("DELETE FROM sessions WHERE start_time < ?", (cutoff_date,))
+                conn.commit()
+                pruned = len(session_ids)
+
+        journals_dir = self.data_dir / "journals"
+        if journals_dir.exists():
+            for sid in session_ids:
+                jf = journals_dir / f"{sid}.json"
+                if jf.exists():
+                    try:
+                        jf.unlink()
+                    except OSError:
+                        pass
+
+        return pruned

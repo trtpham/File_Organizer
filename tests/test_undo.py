@@ -4,6 +4,7 @@ Unit tests for UndoManager.
 
 from smart_file_organizer.core.scanner import FileScanner
 from smart_file_organizer.core.organizer import Organizer
+from smart_file_organizer.core.renamer import SmartBulkRenamer
 from smart_file_organizer.core.executor import TransactionExecutor
 from smart_file_organizer.core.undo_manager import UndoManager
 
@@ -39,3 +40,33 @@ def test_undo_restores_all_files(populated_workspace, temp_workspace):
     # Verify empty category directories were cleaned up
     assert not (populated_workspace / "Images").exists()
     assert not (populated_workspace / "Documents").exists()
+
+
+def test_undo_prune_and_rename_rollback(temp_workspace):
+    test_file = temp_workspace / "document_v1.txt"
+    test_file.write_text("Hello World")
+
+    scanner = FileScanner()
+    files = scanner.scan(temp_workspace)
+
+    renamer = SmartBulkRenamer()
+    records = renamer.plan_rename(files, template="renamed_{name}")
+
+    executor = TransactionExecutor()
+    session = executor.execute_session(records, temp_workspace, temp_workspace, strategy="rename", dry_run=False)
+
+    undo_mgr = UndoManager(data_dir=temp_workspace / "sfo_data2")
+    undo_mgr.save_session(session)
+
+    assert not test_file.exists()
+    assert (temp_workspace / "renamed_document_v1.txt").exists()
+
+    # Rollback rename
+    res = undo_mgr.rollback_session(session.session_id)
+    assert res["success"] is True
+    assert test_file.exists()
+    assert not (temp_workspace / "renamed_document_v1.txt").exists()
+
+    # Test pruning
+    pruned = undo_mgr.prune_old_sessions(days=0)
+    assert pruned >= 1

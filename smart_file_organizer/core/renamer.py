@@ -1,9 +1,12 @@
 """
 Metadata-driven Smart Bulk Renaming Engine (EXIF, ID3, Templates, Casing).
+Enhanced with extended EXIF/ID3 metadata, regex backreference support,
+and unicode slugify / accent normalization.
 """
 
 import os
 import re
+import unicodedata
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -11,11 +14,15 @@ from .models import FileInfo, ActionRecord, ActionType
 
 
 class EXIFExtractor:
-    """Extracts photo metadata (Date Taken, Camera Model, Dimensions)."""
+    """Extracts photo metadata (Date Taken, Camera Model, Dimensions, Exposure, GPS)."""
 
     @staticmethod
     def extract(path: Path) -> Dict[str, Any]:
-        result = {"date": None, "time": None, "camera": None, "width": None, "height": None}
+        result = {
+            "date": None, "time": None, "camera": None,
+            "width": None, "height": None,
+            "iso": None, "shutter": None, "aperture": None, "lens": None
+        }
         try:
             from PIL import Image, ExifTags
             with Image.open(path) as img:
@@ -27,7 +34,6 @@ class EXIFExtractor:
                     exif_data = {ExifTags.TAGS.get(k, k): v for k, v in exif.items()}
                     date_str = exif_data.get("DateTimeOriginal") or exif_data.get("DateTime")
                     if date_str and isinstance(date_str, str):
-                        # Format is typically "YYYY:MM:DD HH:MM:SS"
                         parts = date_str.strip().split(" ")
                         if len(parts) >= 1:
                             result["date"] = parts[0].replace(":", "-")
@@ -38,10 +44,27 @@ class EXIFExtractor:
                     model = str(exif_data.get("Model", "")).strip()
                     if model:
                         result["camera"] = model if not make or make in model else f"{make}_{model}"
+
+                    # Extended photographic properties
+                    if "ISOSpeedRatings" in exif_data:
+                        result["iso"] = str(exif_data["ISOSpeedRatings"])
+                    if "FNumber" in exif_data:
+                        try:
+                            result["aperture"] = f"f{float(exif_data['FNumber']):.1f}"
+                        except (ValueError, TypeError):
+                            pass
+                    if "ExposureTime" in exif_data:
+                        try:
+                            exp = float(exif_data["ExposureTime"])
+                            result["shutter"] = f"1-{int(1/exp)}" if exp < 1 else f"{exp:.1f}s"
+                        except (ValueError, TypeError, ZeroDivisionError):
+                            pass
+                    if "LensModel" in exif_data:
+                        result["lens"] = str(exif_data["LensModel"]).strip()
         except Exception:
             pass
 
-        # Fallback to file creation/modification time if EXIF is missing
+        # Fallback to file creation/modification time if EXIF date is missing
         if not result["date"]:
             stat = path.stat()
             dt = datetime.fromtimestamp(stat.st_mtime)
@@ -56,7 +79,7 @@ class ID3Extractor:
 
     @staticmethod
     def extract(path: Path) -> Dict[str, Any]:
-        result = {"title": None, "artist": None, "album": None, "year": None, "track": None}
+        result = {"title": None, "artist": None, "album": None, "year": None, "track": None, "genre": None}
         try:
             with open(path, "rb") as f:
                 # 1. Try ID3v2 header
@@ -92,7 +115,10 @@ class ID3Extractor:
     @staticmethod
     def _parse_id3v2_frames(data: bytes) -> Dict[str, Any]:
         frames = {}
-        tag_map = {"TIT2": "title", "TPE1": "artist", "TALB": "album", "TYER": "year", "TRCK": "track"}
+        tag_map = {
+            "TIT2": "title", "TPE1": "artist", "TALB": "album",
+            "TYER": "year", "TDRC": "year", "TRCK": "track", "TCON": "genre"
+        }
         idx = 0
         while idx + 10 < len(data):
             frame_id = data[idx:idx+4].decode("latin-1", errors="ignore")
@@ -127,6 +153,12 @@ class SmartBulkRenamer:
     IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tiff", ".webp", ".raw", ".cr2", ".nef", ".arw", ".heic"}
     AUDIO_EXTS = {".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg"}
 
+    @staticmethod
+    def remove_accents(text: str) -> str:
+        """Strips Vietnamese / European diacritics and accents into plain ASCII characters."""
+        nfkd = unicodedata.normalize("NFKD", text)
+        return "".join([c for c in nfkd if not unicodedata.combining(c)]).replace("đ", "d").replace("Đ", "D")
+
     def plan_rename(
         self,
         files: List[FileInfo],
@@ -142,7 +174,7 @@ class SmartBulkRenamer:
     ) -> List[ActionRecord]:
         """
         Generates ActionRecords for planned renaming operations.
-        Supported casing: 'lowercase', 'uppercase', 'title_case', 'snake_case', 'kebab_case'
+        Supported casing: 'lowercase', 'uppercase', 'title_case', 'snake_case', 'kebab_case', 'slugify'
         """
         records: List[ActionRecord] = []
         counter = start_counter
@@ -163,26 +195,36 @@ class SmartBulkRenamer:
                 "camera": "",
                 "artist": "",
                 "title": "",
-                "album": ""
+                "album": "",
+                "year": "",
+                "genre": "",
+                "track": "",
+                "iso": "",
+                "aperture": "",
+                "shutter": "",
+                "lens": ""
             }
 
             if file_info.extension.lower() in self.IMAGE_EXTS:
                 exif = EXIFExtractor.extract(path)
-                if exif.get("date"):
-                    meta["date"] = exif["date"]
-                if exif.get("time"):
-                    meta["time"] = exif["time"]
-                if exif.get("camera"):
-                    meta["camera"] = exif["camera"]
+                for k in ("date", "time", "camera", "iso", "aperture", "shutter", "lens"):
+                    if exif.get(k):
+                        meta[k] = exif[k]
 
             elif file_info.extension.lower() in self.AUDIO_EXTS:
                 id3 = ID3Extractor.extract(path)
-                meta["artist"] = id3.get("artist") or ""
-                meta["title"] = id3.get("title") or ""
-                meta["album"] = id3.get("album") or ""
+                for k in ("artist", "title", "album", "year", "genre", "track"):
+                    if id3.get(k):
+                        meta[k] = id3[k]
 
-            # Apply Template
+            # Apply Template with support for both {counter} and {counter:03d}
             new_name = template
+            # Handle {counter:0Nd} format
+            counter_match = re.search(r"\{counter:0?(\d+)d\}", new_name)
+            if counter_match:
+                pad = int(counter_match.group(1))
+                new_name = new_name.replace(counter_match.group(0), f"{counter:0{pad}d}")
+
             for key, val in meta.items():
                 pattern_key = "{" + key + "}"
                 new_name = new_name.replace(pattern_key, str(val))
@@ -197,7 +239,7 @@ class SmartBulkRenamer:
                 else:
                     new_name = new_name.replace(find_text, replace_text)
 
-            # Apply Casing Transformation
+            # Apply Casing / Accent Transformation
             if case_transform == "lowercase":
                 new_name = new_name.lower()
             elif case_transform == "uppercase":
@@ -207,6 +249,10 @@ class SmartBulkRenamer:
             elif case_transform == "snake_case":
                 new_name = re.sub(r"[\s\-]+", "_", new_name).lower()
             elif case_transform == "kebab_case":
+                new_name = re.sub(r"[\s_]+", "-", new_name).lower()
+            elif case_transform in ("slugify", "no_accents"):
+                clean = self.remove_accents(new_name)
+                new_name = re.sub(r"[^\w\s-]", "", clean).strip()
                 new_name = re.sub(r"[\s_]+", "-", new_name).lower()
 
             # Prefix & Suffix

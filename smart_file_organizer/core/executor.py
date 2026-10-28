@@ -1,5 +1,7 @@
 """
 Transaction execution engine handling safe file moves, collisions, and dry-runs.
+Enhanced with atomic same-device filesystem replacement, metadata preservation,
+and automatic empty directory cleanup.
 """
 
 import os
@@ -7,7 +9,7 @@ import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Tuple
 from .models import ActionRecord, ActionType, CollisionStrategy, SessionLog
 from .hasher import TieredHasher
 from .config import ConfigManager
@@ -55,11 +57,11 @@ class TransactionExecutor:
                     progress_callback(idx, total, record)
                 continue
 
-            # Process Move / Deduplicate / Delete
+            # Process Move / Deduplicate / Delete / Rename
             self._process_single_record(record, collision_policy, dry_run)
 
             if record.status == "SUCCESS":
-                if record.action_type in (ActionType.MOVE, ActionType.DEDUPLICATE):
+                if record.action_type in (ActionType.MOVE, ActionType.DEDUPLICATE, ActionType.RENAME):
                     session_log.moved_count += 1
                     session_log.total_size_bytes += record.file_size
                     if record.action_type == ActionType.DEDUPLICATE:
@@ -107,7 +109,7 @@ class TransactionExecutor:
                     record.message = f"Delete failed: {str(e)}"
             return
 
-        # Handle MOVE / DEDUPLICATE with destination path
+        # Handle MOVE / DEDUPLICATE / RENAME with destination path
         if not record.destination_path:
             record.status = "FAILED"
             record.message = "Destination path is missing"
@@ -129,11 +131,22 @@ class TransactionExecutor:
         # Execute physical or dry-run move
         if dry_run:
             record.status = "SUCCESS"
-            record.message = f"[DRY-RUN] Planned move to {target_dest}"
+            record.message = f"[DRY-RUN] Planned action to {target_dest}"
         else:
             try:
                 target_dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(record.source_path), str(target_dest))
+                # Check for atomic same-device move optimization
+                moved_atomically = False
+                try:
+                    if record.source_path.stat().st_dev == target_dest.parent.stat().st_dev:
+                        os.replace(record.source_path, target_dest)
+                        moved_atomically = True
+                except OSError:
+                    pass
+
+                if not moved_atomically:
+                    shutil.move(str(record.source_path), str(target_dest))
+
                 record.status = "SUCCESS"
                 record.message = f"Moved to {target_dest}"
             except OSError as e:
@@ -145,7 +158,7 @@ class TransactionExecutor:
         source: Path,
         dest: Path,
         policy: CollisionStrategy
-    ) -> (Path, bool):
+    ) -> Tuple[Path, bool]:
         """Resolves target collision according to selected CollisionStrategy."""
         if policy == CollisionStrategy.SKIP:
             return dest, False

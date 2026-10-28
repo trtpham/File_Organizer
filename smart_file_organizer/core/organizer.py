@@ -1,5 +1,6 @@
 """
 Rule-based file organization engine supporting multiple strategies.
+Enhanced with custom date template formatting, regex priority rules, and smart receipts.
 """
 
 import re
@@ -34,7 +35,7 @@ class Organizer:
             is_financial = False
             msg_prefix = "Organize"
 
-            if smart_receipts and f.extension.lower() in (".pdf", ".txt", ".csv", ".jpg", ".png"):
+            if smart_receipts and f.extension.lower() in (".pdf", ".txt", ".csv", ".jpg", ".png", ".webp"):
                 receipt = ReceiptClassifier.analyze_file(f)
                 if receipt.is_receipt:
                     vendor_name = receipt.vendor or "Invoices"
@@ -105,7 +106,10 @@ class Organizer:
         elif fmt == "YYYY-MM-DD":
             return f"{dt.year}-{dt.month:02d}-{dt.day:02d}"
         else:
-            return f"{dt.year}/{dt.month:02d}"
+            try:
+                return dt.strftime(fmt)
+            except Exception:
+                return f"{dt.year}/{dt.month:02d}"
 
     def _match_regex_rules(self, file_info: FileInfo) -> str:
         """Evaluates custom regular expression rules in order, returning matching folder."""

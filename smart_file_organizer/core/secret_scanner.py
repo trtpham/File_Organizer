@@ -1,12 +1,15 @@
 """
 Sensitive Data & Secret Scanner (DLP).
-Detects exposed API tokens, private SSH keys, passwords, and personal identity numbers.
+Enhanced with Shannon Entropy analysis, expanded enterprise token patterns (Slack, Stripe, JWT),
+and secure credential redaction.
 """
 
 import os
 import re
+import math
 import shutil
 from pathlib import Path
+from collections import Counter
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -20,13 +23,15 @@ class SecretFinding:
         line_number: int,
         secret_type: str,
         masked_snippet: str,
-        severity: str = "HIGH"
+        severity: str = "HIGH",
+        entropy: Optional[float] = None
     ):
         self.file_path = file_path
         self.line_number = line_number
         self.secret_type = secret_type
         self.masked_snippet = masked_snippet
         self.severity = severity  # CRITICAL, HIGH, MEDIUM
+        self.entropy = entropy
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -35,7 +40,8 @@ class SecretFinding:
             "line": self.line_number,
             "type": self.secret_type,
             "snippet": self.masked_snippet,
-            "severity": self.severity
+            "severity": self.severity,
+            "entropy": round(self.entropy, 2) if self.entropy is not None else None
         }
 
 
@@ -47,6 +53,9 @@ class SecretScanner:
         ("AWS Access Key", r"\b(AKIA[0-9A-Z]{16})\b", "CRITICAL"),
         ("OpenAI API Key", r"\b(sk-[a-zA-Z0-9T3BlbkFJ]{20,})\b", "CRITICAL"),
         ("GitHub Personal Token", r"\b(ghp_[a-zA-Z0-9]{36})\b", "CRITICAL"),
+        ("Slack Token", r"\b(xox[pboa]-[0-9A-Za-z\-]{20,})\b", "CRITICAL"),
+        ("Stripe Secret Key", r"\b(sk_live_[0-9a-zA-Z]{24,})\b", "CRITICAL"),
+        ("JSON Web Token (JWT)", r"\b(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b", "HIGH"),
         ("Google Cloud API Key", r"\b(AIza[0-9A-Za-z\-_]{35})\b", "HIGH"),
         ("Private Encryption Key", r"-----BEGIN (?:RSA|OPENSSH|DSA|EC) PRIVATE KEY-----", "CRITICAL"),
         ("Database Connection String", r"(?:postgres|mysql|mongodb|redis):\/\/[a-zA-Z0-9_\-\.]+:[^@\s]+@", "HIGH"),
@@ -58,6 +67,19 @@ class SecretScanner:
         ".env", ".txt", ".json", ".yaml", ".yml", ".py", ".js", ".ts",
         ".csv", ".sql", ".xml", ".ini", ".conf", ".cfg", ".sh", ".pem", ".key"
     }
+
+    @staticmethod
+    def calculate_shannon_entropy(text: str) -> float:
+        """Calculates Shannon entropy (bits per symbol) to detect randomized secrets."""
+        if not text:
+            return 0.0
+        length = len(text)
+        counts = Counter(text)
+        entropy = 0.0
+        for count in counts.values():
+            p = count / length
+            entropy -= p * math.log2(p)
+        return entropy
 
     @classmethod
     def scan_file(cls, path: Path) -> List[SecretFinding]:
@@ -82,7 +104,8 @@ class SecretScanner:
                         match = re.search(regex, line)
                         if match:
                             raw_val = match.group(0)
-                            # Mask middle part of the secret
+                            entropy = cls.calculate_shannon_entropy(raw_val)
+                            # Mask middle part of the secret safely
                             if len(raw_val) > 8:
                                 masked = raw_val[:4] + "*" * (len(raw_val) - 8) + raw_val[-4:]
                             else:
@@ -93,7 +116,8 @@ class SecretScanner:
                                 line_number=line_no,
                                 secret_type=label,
                                 masked_snippet=masked,
-                                severity=severity
+                                severity=severity,
+                                entropy=entropy
                             ))
                             break
         except Exception:

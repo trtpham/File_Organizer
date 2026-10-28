@@ -1,6 +1,7 @@
 """
 Developer and Application Junk Sweeper.
 Discovers and cleans heavy inactive node_modules, .venv, build caches, and temp files.
+Enhanced with modern dev ecosystems (Rust, Next.js, Flutter, Turborepo, Gradle).
 """
 
 import os
@@ -52,6 +53,23 @@ class JunkItem:
 class DevJunkCleaner:
     """Scans and cleans heavy development caches and temporary bloat."""
 
+    # Common junk directory names and descriptions
+    TARGET_DIRS = {
+        "node_modules": (JunkCategory.NODE_MODULES, "JavaScript dependency package tree"),
+        ".venv": (JunkCategory.VIRTUAL_ENV, "Python isolated virtual environment"),
+        "venv": (JunkCategory.VIRTUAL_ENV, "Python isolated virtual environment"),
+        "__pycache__": (JunkCategory.PYTHON_CACHE, "Compiled Python .pyc files"),
+        ".pytest_cache": (JunkCategory.PYTHON_CACHE, "Pytest test run cache"),
+        ".mypy_cache": (JunkCategory.PYTHON_CACHE, "Mypy type checker cache"),
+        "target": (JunkCategory.BUILD_ARTIFACTS, "Rust/Java compiled binary build artifacts"),
+        ".gradle": (JunkCategory.BUILD_ARTIFACTS, "Gradle build system cache"),
+        ".dart_tool": (JunkCategory.BUILD_ARTIFACTS, "Dart/Flutter build cache"),
+        ".next": (JunkCategory.BUILD_ARTIFACTS, "Next.js build artifacts"),
+        ".nuxt": (JunkCategory.BUILD_ARTIFACTS, "Nuxt.js build artifacts"),
+        ".turbo": (JunkCategory.BUILD_ARTIFACTS, "Turborepo cache"),
+        "DerivedData": (JunkCategory.BUILD_ARTIFACTS, "Xcode compiled intermediates")
+    }
+
     @classmethod
     def scan_directory(cls, root_dir: Path, inactive_days: int = 14) -> List[JunkItem]:
         """Scans for developer junk directories older than inactive_days."""
@@ -59,32 +77,24 @@ class DevJunkCleaner:
         root_path = Path(root_dir).resolve()
         cutoff = datetime.now() - timedelta(days=inactive_days)
 
-        # Common junk directory names
-        target_dirs = {
-            "node_modules": (JunkCategory.NODE_MODULES, "JavaScript dependency package tree"),
-            ".venv": (JunkCategory.VIRTUAL_ENV, "Python isolated virtual environment"),
-            "venv": (JunkCategory.VIRTUAL_ENV, "Python isolated virtual environment"),
-            "__pycache__": (JunkCategory.PYTHON_CACHE, "Compiled Python .pyc files"),
-            ".pytest_cache": (JunkCategory.PYTHON_CACHE, "Pytest test run cache"),
-            ".mypy_cache": (JunkCategory.PYTHON_CACHE, "Mypy type checker cache"),
-            "target": (JunkCategory.BUILD_ARTIFACTS, "Rust/Java compiled binary build artifacts"),
-            ".gradle": (JunkCategory.BUILD_ARTIFACTS, "Gradle build system cache")
-        }
-
         try:
             for root, dirs, _ in os.walk(root_path):
+                # Never touch git directories
+                if ".git" in dirs:
+                    dirs.remove(".git")
+
                 # Check each subdirectory
                 for d in list(dirs):
-                    if d in target_dirs:
+                    if d in cls.TARGET_DIRS:
                         junk_dir = Path(root) / d
                         try:
                             stat = junk_dir.stat()
                             mtime = datetime.fromtimestamp(stat.st_mtime)
 
                             # If inactive beyond cutoff or bytecode cache
-                            if mtime < cutoff or d in ("__pycache__", ".pytest_cache"):
+                            if mtime < cutoff or d in ("__pycache__", ".pytest_cache", ".mypy_cache"):
                                 size = cls._calculate_folder_size(junk_dir)
-                                cat, desc = target_dirs[d]
+                                cat, desc = cls.TARGET_DIRS[d]
                                 results.append(JunkItem(
                                     name=d,
                                     path=junk_dir,
@@ -118,65 +128,78 @@ class DevJunkCleaner:
                     if mtime < cutoff:
                         if entry.is_file():
                             size = stat.st_size
-                        else:
-                            size = cls._calculate_folder_size(entry_path)
-
-                        if size > 1024 * 1024:  # Only report items > 1MB
                             results.append(JunkItem(
                                 name=entry.name,
                                 path=entry_path,
                                 category=JunkCategory.SYSTEM_TEMP,
                                 size_bytes=size,
                                 last_modified=mtime,
-                                description="Stale operating system temporary file/folder"
+                                description="Temporary system file"
+                            ))
+                        elif entry.is_dir(follow_symlinks=False):
+                            size = cls._calculate_folder_size(entry_path)
+                            results.append(JunkItem(
+                                name=entry.name,
+                                path=entry_path,
+                                category=JunkCategory.SYSTEM_TEMP,
+                                size_bytes=size,
+                                last_modified=mtime,
+                                description="Temporary system directory"
                             ))
                 except (PermissionError, FileNotFoundError, OSError):
-                    continue
+                    pass
         except (PermissionError, OSError):
             pass
 
         return results
 
-    @staticmethod
-    def clean_junk(items: List[JunkItem], dry_run: bool = False) -> Dict[str, Any]:
-        """Removes the specified junk items and reclaims storage space."""
+    @classmethod
+    def clean_junk(cls, items: List[JunkItem], dry_run: bool = False) -> Dict[str, Any]:
+        """Safely removes discovered junk files and directories."""
         cleaned_count = 0
-        freed_bytes = 0
+        reclaimed_bytes = 0
         errors: List[str] = []
 
         for item in items:
-            if not item.path.exists():
+            target = item.path
+            if not target.exists():
                 continue
 
-            if dry_run:
-                cleaned_count += 1
-                freed_bytes += item.size_bytes
-            else:
+            reclaimed_bytes += item.size_bytes
+            cleaned_count += 1
+
+            if not dry_run:
                 try:
-                    if item.path.is_file():
-                        item.path.unlink()
+                    if target.is_dir():
+                        shutil.rmtree(target, ignore_errors=False)
                     else:
-                        shutil.rmtree(item.path)
-                    cleaned_count += 1
-                    freed_bytes += item.size_bytes
+                        target.unlink()
                 except Exception as e:
-                    errors.append(f"Cannot delete {item.path.name}: {str(e)}")
+                    errors.append(f"Failed to remove {target.name}: {str(e)}")
 
         return {
             "success": len(errors) == 0,
             "cleaned_count": cleaned_count,
-            "freed_bytes": freed_bytes,
+            "reclaimed_bytes": reclaimed_bytes,
+            "dry_run": dry_run,
             "errors": errors,
-            "message": f"Cleaned {cleaned_count} items, freeing {freed_bytes / (1024*1024):.1f} MB disk space."
+            "message": f"{'[DRY RUN] Would reclaim' if dry_run else 'Reclaimed'} {reclaimed_bytes / (1024*1024):.1f} MB across {cleaned_count} items."
         }
 
+    # Alias for backward compatibility
+    clean_items = clean_junk
+
     @staticmethod
-    def _calculate_folder_size(path: Path) -> int:
+    def _calculate_folder_size(folder: Path) -> int:
+        """Fast calculation of folder size in bytes."""
         total = 0
-        for root, _, files in os.walk(path):
-            for f in files:
-                try:
-                    total += (Path(root) / f).stat().st_size
-                except OSError:
-                    pass
+        try:
+            for root, _, files in os.walk(folder):
+                for f in files:
+                    try:
+                        total += (Path(root) / f).stat().st_size
+                    except (PermissionError, OSError):
+                        pass
+        except Exception:
+            pass
         return total

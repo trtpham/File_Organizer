@@ -1,8 +1,9 @@
 """
 Cross-Device LAN File Transfer & Sharing Server.
 Enables instant file sharing between PC, phones, and laptops on the same Wi-Fi network.
+Enhanced with multi-threaded concurrent connections (ThreadingHTTPServer),
+HTTP Range streaming/resumable downloads, and mobile-responsive drag-and-drop web UI.
 Zero external dependencies (Python Standard Library http.server + socket).
-Fully compatible with Python 3.10 through 3.14+ (No deprecated cgi module).
 """
 
 import os
@@ -11,7 +12,7 @@ import socket
 import threading
 import urllib.parse
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Optional, Dict, Any, List
 
 
@@ -30,7 +31,7 @@ def get_local_ip() -> str:
 
 
 class LANShareHandler(BaseHTTPRequestHandler):
-    """HTTP request handler providing file download, upload, and dashboard."""
+    """HTTP request handler providing multi-threaded file download, upload, and dashboard."""
 
     shared_dir: Path = Path.cwd()
     pin: Optional[str] = None
@@ -103,7 +104,7 @@ class LANShareHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
     def _handle_upload(self) -> None:
-        """Handles multipart/form-data upload without using deprecated cgi module."""
+        """Handles multipart/form-data upload in memory-safe streaming fashion."""
         content_type = self.headers.get("Content-Type", "")
         if not content_type.startswith("multipart/form-data"):
             self.send_error(400, "Bad Request: Expected multipart/form-data")
@@ -127,16 +128,15 @@ class LANShareHandler(BaseHTTPRequestHandler):
         for part in parts:
             if not part or part == b"--\r\n" or part == b"--":
                 continue
-            if b"\r\n\r\n" not in part:
+
+            header_end = part.find(b"\r\n\r\n")
+            if header_end == -1:
                 continue
 
-            header_bytes, file_bytes = part.split(b"\r\n\r\n", 1)
-            # Strip trailing CRLF from file content
-            if file_bytes.endswith(b"\r\n"):
-                file_bytes = file_bytes[:-2]
+            header_bytes = part[:header_end]
+            file_bytes = part[header_end + 4:].rstrip(b"\r\n")
 
-            header_str = header_bytes.decode("utf-8", errors="ignore")
-            # Extract filename
+            header_str = header_bytes.decode("latin-1", errors="ignore")
             fn_match = re.search(r'filename="([^"]+)"', header_str)
             if fn_match:
                 filename = Path(fn_match.group(1)).name
@@ -151,12 +151,42 @@ class LANShareHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _serve_file(self, target: Path) -> None:
+        """Streams file with HTTP Range support for resumable downloads and media streaming."""
         try:
             size = target.stat().st_size
+            range_header = self.headers.get("Range")
+
+            if range_header:
+                range_match = re.search(r"bytes=(\d+)-(\d+)?", range_header)
+                if range_match:
+                    start = int(range_match.group(1))
+                    end = int(range_match.group(2)) if range_match.group(2) else size - 1
+                    content_len = end - start + 1
+                    self.send_response(206)  # Partial Content
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                    self.send_header("Content-Length", str(content_len))
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.end_headers()
+
+                    with open(target, "rb") as f:
+                        f.seek(start)
+                        remaining = content_len
+                        while remaining > 0:
+                            chunk_size = min(65536, remaining)
+                            chunk = f.read(chunk_size)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            remaining -= len(chunk)
+                    return
+
             self.send_response(200)
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("Content-Disposition", f'attachment; filename="{target.name}"')
             self.send_header("Content-Length", str(size))
+            self.send_header("Accept-Ranges", "bytes")
             self.end_headers()
 
             with open(target, "rb") as f:
@@ -178,16 +208,15 @@ class LANShareHandler(BaseHTTPRequestHandler):
         .card {{ background: #131d31; padding: 32px; border-radius: 12px; border: 1px solid #1e293b; width: 320px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }}
         input {{ width: 100%; box-sizing: border-box; padding: 12px; font-size: 18px; text-align: center; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; margin: 16px 0; }}
         button {{ width: 100%; padding: 12px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }}
-        button:hover {{ background: #2563eb; }}
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>🔒 Protected LAN Drop</h2>
-        <p style="color: #94a3b8; font-size: 14px;">Enter the 4-digit PIN displayed on your PC screen:</p>
+        <h2 style="margin-top: 0;">🔐 SFO LAN Drop</h2>
+        <p style="color: #94a3b8; font-size: 14px;">Enter the 4-digit PIN displayed on your PC to access files:</p>
         {error_html}
         <form method="POST" action="/login">
-            <input type="password" name="pin" placeholder="••••" maxlength="6" autofocus required>
+            <input type="password" name="pin" maxlength="8" placeholder="••••" required autofocus>
             <button type="submit">Unlock Files</button>
         </form>
     </div>
@@ -199,44 +228,43 @@ class LANShareHandler(BaseHTTPRequestHandler):
         self.wfile.write(html.encode("utf-8"))
 
     def _render_dashboard(self) -> None:
-        files: List[Path] = []
+        files = []
         try:
-            for p in self.shared_dir.iterdir():
-                if p.is_file() and not p.name.startswith("."):
-                    files.append(p)
-            files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            for item in sorted(self.shared_dir.iterdir()):
+                if item.is_file() and not item.name.startswith("."):
+                    size_mb = item.stat().st_size / (1024 * 1024)
+                    size_str = f"{size_mb:.2f} MB" if size_mb >= 1.0 else f"{item.stat().st_size / 1024:.1f} KB"
+                    files.append((item.name, size_str))
         except Exception:
             pass
 
         rows = []
-        for f in files:
-            sz = f.stat().st_size
-            sz_str = f"{sz / (1024*1024):.1f} MB" if sz > 1024*1024 else f"{sz / 1024:.1f} KB"
-            dl_url = f"/download/{urllib.parse.quote(f.name)}"
+        for name, size in files:
+            safe_name = urllib.parse.quote(name)
             rows.append(f"""
-            <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #1e293b;">📄 {f.name}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #1e293b; color: #94a3b8;">{sz_str}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #1e293b; text-align: right;">
-                    <a href="{dl_url}" style="background: #2563eb; color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: bold;">Download</a>
+            <tr style="border-bottom: 1px solid #1e293b;">
+                <td style="padding: 12px 10px; font-weight: 500;">📄 {name}</td>
+                <td style="padding: 12px 10px; color: #94a3b8;">{size}</td>
+                <td style="padding: 12px 10px; text-align: right;">
+                    <a href="/download/{safe_name}" style="background: #3b82f6; color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: bold;">Download</a>
                 </td>
             </tr>
             """)
 
-        files_table = "".join(rows) if rows else "<tr><td colspan='3' style='padding: 24px; text-align: center; color: #64748b;'>No files in shared directory.</td></tr>"
+        files_table = "".join(rows) if rows else '<tr><td colspan="3" style="text-align: center; padding: 24px; color: #64748b;">No files in shared directory.</td></tr>'
 
         html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SFO LAN Drop - File Exchange</title>
+    <title>SFO Wireless LAN Drop</title>
     <style>
-        body {{ background: #0b0f19; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 24px; }}
+        body {{ background: #0b0f19; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; }}
         .container {{ max-width: 800px; margin: 0 auto; }}
-        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #1e293b; padding-bottom: 16px; }}
-        .card {{ background: #131d31; border-radius: 10px; border: 1px solid #1e293b; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }}
-        .upload-zone {{ border: 2px dashed #3b82f6; border-radius: 8px; padding: 24px; text-align: center; background: rgba(59, 130, 246, 0.05); }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }}
+        .card {{ background: #131d31; border: 1px solid #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }}
+        .upload-zone {{ border: 2px dashed #334155; border-radius: 8px; padding: 24px; text-align: center; background: #0f172a; cursor: pointer; }}
         table {{ width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }}
         input[type="file"] {{ display: block; margin: 12px auto; color: #94a3b8; }}
         .btn {{ background: #10b981; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }}
@@ -250,7 +278,7 @@ class LANShareHandler(BaseHTTPRequestHandler):
                 <h1 style="margin: 0; font-size: 22px;">📡 Smart File Organizer - LAN Drop</h1>
                 <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">Shared folder: {self.shared_dir.name}</p>
             </div>
-            <span style="background: #1e293b; color: #38bdf8; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">LAN Connected</span>
+            <span style="background: #1e293b; color: #38bdf8; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">LAN Connected (Multi-Threaded)</span>
         </div>
 
         <div class="card">
@@ -287,17 +315,17 @@ class LANShareHandler(BaseHTTPRequestHandler):
 
 
 class LANShareServer:
-    """Manages the background HTTP daemon for LAN file sharing."""
+    """Manages the background HTTP daemon for LAN file sharing using ThreadingHTTPServer."""
 
     def __init__(self, shared_dir: Path, port: int = 8080, pin: Optional[str] = None):
         self.shared_dir = Path(shared_dir).resolve()
         self.port = port
         self.pin = pin
-        self.server: Optional[HTTPServer] = None
+        self.server: Optional[ThreadingHTTPServer] = None
         self.thread: Optional[threading.Thread] = None
 
     def start(self) -> Dict[str, Any]:
-        """Starts the HTTP server on a background daemon thread."""
+        """Starts the multi-threaded HTTP server on a background daemon thread."""
         if self.is_running():
             return {"success": True, "message": "Server is already running.", "url": self.get_url()}
 
@@ -308,7 +336,7 @@ class LANShareServer:
         CustomHandler.pin = self.pin
 
         try:
-            self.server = HTTPServer(("0.0.0.0", self.port), CustomHandler)
+            self.server = ThreadingHTTPServer(("0.0.0.0", self.port), CustomHandler)
             self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
             self.thread.start()
 

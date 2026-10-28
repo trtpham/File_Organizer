@@ -40,6 +40,13 @@ def test_case_transformations(temp_workspace):
     records_up = renamer.plan_rename([info], template="{name}", case_transform="uppercase")
     assert records_up[0].destination_path.name == "MY COOL PROJECT_V1.txt"
 
+    # Slugify with accents removal
+    f2 = temp_workspace / "Hóa Đơn Tiền Điện Tháng 10.pdf"
+    f2.write_text("sample")
+    info2 = FileInfo.from_path(f2)
+    records_slug = renamer.plan_rename([info2], template="{name}", case_transform="slugify")
+    assert records_slug[0].destination_path.name == "hoa-don-tien-dien-thang-10.pdf"
+
 
 def test_find_and_replace(temp_workspace):
     f1 = temp_workspace / "IMG_2026_RAW.jpg"
@@ -58,13 +65,21 @@ def test_find_and_replace(temp_workspace):
 
 
 def test_id3_v1_extraction(temp_workspace):
-    mp3_file = temp_workspace / "song.mp3"
-    # Construct standard ID3v1 trailer (128 bytes)
-    header = b"\x00" * 1000
-    v1_tag = b"TAG" + b"Awesome Title".ljust(30, b"\x00") + b"Top Artist".ljust(30, b"\x00") + b"Great Album".ljust(30, b"\x00") + b"2026" + b"\x00" * 31
-    mp3_file.write_bytes(header + v1_tag)
+    mp3 = temp_workspace / "test.mp3"
+    # Construct synthetic ID3v1 trailer (128 bytes)
+    header = b"TAG"
+    title = b"Test Song".ljust(30, b"\x00")
+    artist = b"Test Artist".ljust(30, b"\x00")
+    album = b"Test Album".ljust(30, b"\x00")
+    year = b"2026".ljust(4, b"\x00")
+    comment = b"Comment".ljust(30, b"\x00")
+    genre = b"\x0c"
 
-    tags = ID3Extractor.extract(mp3_file)
-    assert tags["title"] == "Awesome Title"
-    assert tags["artist"] == "Top Artist"
-    assert tags["album"] == "Great Album"
+    v1_payload = header + title + artist + album + year + comment + genre
+    mp3.write_bytes(b"FAKE_AUDIO_DATA" * 10 + v1_payload)
+
+    tags = ID3Extractor.extract(mp3)
+    assert tags["title"] == "Test Song"
+    assert tags["artist"] == "Test Artist"
+    assert tags["album"] == "Test Album"
+    assert tags["year"] == "2026"

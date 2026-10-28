@@ -1,11 +1,12 @@
 """
 Real-time directory watcher with download stabilization debounce.
+Enhanced with adaptive low-CPU polling intervals and expanded incomplete-download filtering.
 """
 
 import time
 import threading
 from pathlib import Path
-from typing import Dict, Optional, Callable, Set
+from typing import Dict, Optional, Callable, Set, List
 from .models import FileInfo, OrganizeStrategy, SyncProfile
 from .scanner import FileScanner
 from .organizer import Organizer
@@ -17,6 +18,11 @@ from .syncer import DriveDetector, FolderSynchronizer
 
 class DirectoryWatcher:
     """Monitors a folder in background, debounces downloads, and auto-organizes files."""
+
+    TEMP_EXTENSIONS = {
+        ".crdownload", ".tmp", ".part", ".downloading", ".aria2",
+        ".sfo_tmp", ".download", ".opdownload"
+    }
 
     def __init__(
         self,
@@ -63,10 +69,12 @@ class DirectoryWatcher:
         def _run_loop():
             while not self._stop_event.is_set():
                 try:
-                    self._check_and_organize(on_organized)
+                    active = self._check_and_organize(on_organized)
+                    # Adaptive sleep: check faster if files are stabilizing, relax when idle
+                    sleep_time = 1.0 if active else self.check_interval
                 except Exception:
-                    pass
-                time.sleep(self.check_interval)
+                    sleep_time = self.check_interval
+                time.sleep(sleep_time)
 
         if blocking:
             _run_loop()
@@ -84,21 +92,22 @@ class DirectoryWatcher:
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive() and not self._stop_event.is_set()
 
-    def _check_and_organize(self, on_organized: Optional[Callable[[str, str], None]]) -> None:
-        """Inspects source directory and triggers organization for stabilized files."""
+    def _check_and_organize(self, on_organized: Optional[Callable[[str, str], None]]) -> bool:
+        """Inspects source directory and triggers organization for stabilized files. Returns True if active."""
         # Exclude destination folder if inside source
         exclude = [self.destination_dir] if self.destination_dir != self.source_dir else []
         candidates = self.scanner.scan(self.source_dir, recursive=False, exclude_dirs=exclude)
 
         now = time.time()
         current_paths: Set[Path] = set()
+        has_active_files = False
 
         for f in candidates:
             path = f.path
             current_paths.add(path)
 
-            # Skip incomplete downloads
-            if path.suffix.lower() in [".crdownload", ".tmp", ".part", ".downloading"]:
+            # Skip incomplete downloads or temporary files
+            if path.suffix.lower() in self.TEMP_EXTENSIONS or path.name.startswith("~") or path.name.startswith("."):
                 continue
 
             current_size = f.size_bytes
@@ -107,16 +116,19 @@ class DirectoryWatcher:
             if state is None:
                 # First time seeing this file, record state
                 self._file_states[path] = {"size": current_size, "time": now}
+                has_active_files = True
             else:
                 if state["size"] != current_size:
                     # Size changed, download is still active
                     self._file_states[path] = {"size": current_size, "time": now}
+                    has_active_files = True
                 else:
                     # Size stable, check if debounce duration elapsed
                     if now - state["time"] >= self.debounce_seconds:
                         self._organize_single_file(f, on_organized)
-                        # Remove from tracking
                         self._file_states.pop(path, None)
+                    else:
+                        has_active_files = True
 
         # Cleanup removed files from states
         stale_paths = [p for p in self._file_states if p not in current_paths]
@@ -126,6 +138,8 @@ class DirectoryWatcher:
         # Check for USB Drive insertions and auto-sync
         if self.sync_profiles:
             self._check_usb_and_sync()
+
+        return has_active_files
 
     def _check_usb_and_sync(self) -> None:
         """Inspects connected USB drives and runs matching sync profiles."""
@@ -165,6 +179,5 @@ class DirectoryWatcher:
         )
         self.undo_manager.save_session(session)
 
-        if on_organized and session.records and session.records[0].status == "SUCCESS":
-            rec = session.records[0]
-            on_organized(rec.source_path.name, str(rec.destination_path))
+        if on_organized and records[0].destination_path:
+            on_organized(records[0].source_path.name, records[0].destination_path.name)

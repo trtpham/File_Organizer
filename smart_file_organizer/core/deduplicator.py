@@ -1,5 +1,6 @@
 """
 High-performance duplicate file detection using 3-tiered hashing.
+Enhanced with multi-threaded parallel hashing and expanded keep-selection strategies.
 """
 
 from collections import defaultdict
@@ -25,8 +26,8 @@ class Deduplicator:
         """
         Executes 3-tiered duplicate identification:
           Tier 1: Group by file size in bytes
-          Tier 2: Group by 64KB partial hash
-          Tier 3: Group by full SHA-256 hash
+          Tier 2: Group by 128KB partial hash (computed in parallel)
+          Tier 3: Group by full SHA-256 hash (computed in parallel)
         """
         # Tier 1: Group by exact size (exclude 0-byte files from hashing)
         size_groups: Dict[int, List[FileInfo]] = defaultdict(list)
@@ -41,15 +42,16 @@ class Deduplicator:
         if progress_callback:
             progress_callback("tier1_complete", len(candidates_tier1), len(files))
 
-        # Tier 2: Partial Hash on surviving candidates
+        # Flatten surviving candidates for parallel partial hashing
+        tier1_flat = [f for group in candidates_tier1 for f in group]
+        TieredHasher.populate_hashes_parallel(tier1_flat, full=False)
+
+        # Tier 2: Group by partial hash
         partial_groups: Dict[str, List[FileInfo]] = defaultdict(list)
-        for group in candidates_tier1:
-            for file_info in group:
-                TieredHasher.populate_hashes(file_info, full=False)
-                if file_info.partial_hash:
-                    # Key combined with size to prevent accidental cross-size collisions
-                    key = f"{file_info.size_bytes}_{file_info.partial_hash}"
-                    partial_groups[key].append(file_info)
+        for file_info in tier1_flat:
+            if file_info.partial_hash:
+                key = f"{file_info.size_bytes}_{file_info.partial_hash}"
+                partial_groups[key].append(file_info)
 
         candidates_tier2: List[List[FileInfo]] = [
             group for group in partial_groups.values() if len(group) > 1
@@ -58,14 +60,16 @@ class Deduplicator:
         if progress_callback:
             progress_callback("tier2_complete", len(candidates_tier2), len(candidates_tier1))
 
-        # Tier 3: Full SHA-256 Cryptographic Hash
+        # Flatten surviving candidates for parallel full hashing
+        tier2_flat = [f for group in candidates_tier2 for f in group]
+        TieredHasher.populate_hashes_parallel(tier2_flat, full=True)
+
+        # Tier 3: Group by full SHA-256 hash
         full_groups: Dict[str, List[FileInfo]] = defaultdict(list)
-        for group in candidates_tier2:
-            for file_info in group:
-                TieredHasher.populate_hashes(file_info, full=True)
-                if file_info.full_hash:
-                    key = f"{file_info.size_bytes}_{file_info.full_hash}"
-                    full_groups[key].append(file_info)
+        for file_info in tier2_flat:
+            if file_info.full_hash:
+                key = f"{file_info.size_bytes}_{file_info.full_hash}"
+                full_groups[key].append(file_info)
 
         # Build DuplicateGroup results
         keep_policy = self.config.deduplication_settings.get("keep_policy", "oldest")
@@ -91,8 +95,28 @@ class Deduplicator:
         """Determines which file in the duplicate group should be preserved as the original."""
         if policy == "newest":
             return max(files, key=lambda f: f.modified_time)
+        elif policy == "largest":
+            return max(files, key=lambda f: f.size_bytes)
         elif policy == "shortest_path":
             return min(files, key=lambda f: len(str(f.path)))
+        elif policy == "highest_resolution":
+            # For images, prefer highest resolution if Pillow is available
+            best = files[0]
+            max_pixels = -1
+            try:
+                from PIL import Image
+                for f in files:
+                    try:
+                        with Image.open(f.path) as img:
+                            pixels = img.width * img.height
+                            if pixels > max_pixels:
+                                max_pixels = pixels
+                                best = f
+                    except Exception:
+                        pass
+                return best
+            except Exception:
+                return min(files, key=lambda f: f.created_time)
         else:  # default: oldest
             return min(files, key=lambda f: f.created_time)
 

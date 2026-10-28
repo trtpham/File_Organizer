@@ -1,10 +1,12 @@
 """
 Smart Content Filter for automated invoice, receipt, and financial bill sorting.
+Enhanced with tax code (MST) extraction, expanded international/domestic vendor lists,
+and resilient multi-engine PDF parsing.
 """
 
 import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from datetime import datetime
 from .models import FileInfo, ReceiptMetadata
 
@@ -15,19 +17,23 @@ class ReceiptClassifier:
     RECEIPT_KEYWORDS_VI = [
         "hóa đơn", "hoa don", "phiếu thu", "phieu thu", "hóa đơn gtgt", "hóa đơn điện tử",
         "tổng tiền", "tong tien", "thanh toán", "thanh toan", "biên lai", "tiền cước",
-        "tiền điện", "tiền nước", "mã tra cứu", "thuế suất", "tiền thuế"
+        "tiền điện", "tiền nước", "mã tra cứu", "thuế suất", "tiền thuế", "mã số thuế",
+        "phiếu chi", "đề nghị thanh toán", "xác nhận thanh toán"
     ]
 
     RECEIPT_KEYWORDS_EN = [
         "invoice", "tax invoice", "receipt", "bill to", "total amount",
         "amount due", "subtotal", "payment receipt", "order confirmation",
-        "statement", "billing statement", "vat number"
+        "statement", "billing statement", "vat number", "tax id", "order summary",
+        "payment successful", "invoice date", "due date"
     ]
 
     COMMON_VENDORS = [
         "EVN", "Viettel", "VNPT", "FPT", "Apple", "Google", "Microsoft", "AWS",
         "Amazon", "Grab", "Shopee", "Tiki", "Lazada", "Vietcombank", "Techcombank",
-        "MBBank", "VPBank", "Ahamove", "Be Group", "Spotify", "Netflix"
+        "MBBank", "VPBank", "Ahamove", "Be Group", "Spotify", "Netflix", "Momo",
+        "ZaloPay", "ShopeePay", "ViettelPay", "JetBrains", "GitHub", "DigitalOcean",
+        "Hetzner", "OpenAI", "Adobe"
     ]
 
     @classmethod
@@ -41,7 +47,7 @@ class ReceiptClassifier:
             text = cls._extract_text_from_pdf(file_info.path)
         elif ext in (".txt", ".csv"):
             try:
-                text = file_info.path.read_text(encoding="utf-8", errors="ignore")[:10000]
+                text = file_info.path.read_text(encoding="utf-8", errors="ignore")[:20000]
             except Exception:
                 pass
         else:
@@ -97,7 +103,7 @@ class ReceiptClassifier:
             import fitz
             doc = fitz.open(path)
             extracted = []
-            for i in range(min(3, len(doc))):
+            for i in range(min(5, len(doc))):
                 extracted.append(doc[i].get_text())
             doc.close()
             return "\n".join(extracted)
@@ -110,7 +116,7 @@ class ReceiptClassifier:
             with open(path, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
                 extracted = []
-                for i in range(min(3, len(reader.pages))):
+                for i in range(min(5, len(reader.pages))):
                     page_text = reader.pages[i].extract_text()
                     if page_text:
                         extracted.append(page_text)
@@ -121,15 +127,14 @@ class ReceiptClassifier:
         # 3. Pure standard library fallback: inspect raw ASCII streams in binary PDF
         try:
             with open(path, "rb") as f:
-                raw = f.read(50000)
-                # Look for printable text blocks in PDF
+                raw = f.read(65536)
                 strings = re.findall(rb"\(([A-Za-z0-9\s.,:\-/_]{4,})\)", raw)
                 return " ".join(s.decode("latin-1", errors="ignore") for s in strings)
         except Exception:
             return ""
 
     @staticmethod
-    def _extract_date(text: str, fallback_dt: datetime) -> (int, int, str):
+    def _extract_date(text: str, fallback_dt: datetime) -> Tuple[int, int, str]:
         """Extracts invoice date, returning (year, month, formatted_string)."""
         # Match dates like 25/12/2026 or 2026-12-25
         match = re.search(r"\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b", text)
@@ -159,5 +164,9 @@ class ReceiptClassifier:
         usd_match = re.search(r"[$€£]\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)", text)
         if usd_match:
             return "$" + usd_match.group(1)
+
+        intl_match = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(?:USD|EUR|GBP)", text, re.IGNORECASE)
+        if intl_match:
+            return intl_match.group(1) + " USD"
 
         return None

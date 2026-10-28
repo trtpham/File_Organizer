@@ -30,3 +30,18 @@ def test_identical_files_produce_identical_hashes(temp_workspace):
     hash2 = TieredHasher.compute_full_hash(f2)
 
     assert hash1 == hash2
+
+
+def test_parallel_batch_hashing(temp_workspace):
+    files = []
+    for i in range(5):
+        p = temp_workspace / f"batch_{i}.dat"
+        p.write_bytes(f"BATCH_CONTENT_{i}".encode("utf-8") * 1000)
+        files.append(FileInfo.from_path(p))
+
+    TieredHasher.populate_hashes_parallel(files, full=True, max_workers=2)
+
+    for f in files:
+        assert f.partial_hash is not None
+        assert f.full_hash is not None
+        assert len(f.full_hash) == 64

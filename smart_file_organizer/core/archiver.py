@@ -1,7 +1,7 @@
 """
 Cold Storage & Compression Archiver.
-Identifies inactive or old files, compresses them into organized ZIP/tar archives,
-stores internal manifest metadata, and safely reclaims disk space with undo support.
+Identifies inactive or old files, compresses them into organized ZIP archives with level 9 compression,
+stores internal manifest metadata, performs archive integrity self-testing, and restores original timestamps.
 Zero external dependencies.
 """
 
@@ -10,7 +10,7 @@ import time
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from datetime import datetime, timezone
 
 from .models import FileInfo
@@ -71,11 +71,12 @@ class ColdStorageArchiver:
         files: List[FileInfo],
         archive_path: Path,
         base_dir: Optional[Path] = None,
-        delete_sources: bool = False
+        delete_sources: bool = False,
+        progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> Dict[str, Any]:
         """
-        Compresses a list of files into an archive.
-        If delete_sources is True, deletes original files after successful compression.
+        Compresses a list of files into an archive using maximum Deflate compression (level 9).
+        Performs cryptographic CRC / testzip integrity verification before removing original files.
         """
         if not files:
             return {"success": False, "message": "No files specified for archiving.", "archived_count": 0, "bytes_saved": 0}
@@ -86,10 +87,11 @@ class ColdStorageArchiver:
         manifest_entries = []
         total_raw_size = 0
         deleted_files = []
+        total = len(files)
 
         try:
-            with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-                for file_info in files:
+            with zipfile.ZipFile(archive_path, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+                for idx, file_info in enumerate(files, start=1):
                     src = file_info.path
                     if not src.exists():
                         continue
@@ -110,6 +112,8 @@ class ColdStorageArchiver:
                         "size": file_info.size_bytes,
                         "mtime": file_info.modified_time.isoformat()
                     })
+                    if progress_callback:
+                        progress_callback(idx, total)
 
                 # Write manifest inside archive
                 manifest_data = {
@@ -119,6 +123,12 @@ class ColdStorageArchiver:
                     "files": manifest_entries
                 }
                 zf.writestr(cls.MANIFEST_NAME, json.dumps(manifest_data, indent=2))
+
+            # Integrity verification before source deletion
+            with zipfile.ZipFile(archive_path, mode="r") as zf:
+                bad_file = zf.testzip()
+                if bad_file is not None:
+                    raise RuntimeError(f"Archive verification failed! Corrupted member: {bad_file}")
 
             compressed_size = archive_path.stat().st_size
             bytes_saved = max(0, total_raw_size - compressed_size)
@@ -156,7 +166,8 @@ class ColdStorageArchiver:
     @classmethod
     def restore_archive(cls, archive_path: Path, target_dir: Optional[Path] = None) -> Dict[str, Any]:
         """
-        Extracts files from an archive back to their original or specified directory.
+        Extracts files from an archive back to their original or specified directory,
+        preserving original file modification timestamps.
         """
         archive_path = Path(archive_path).resolve()
         if not archive_path.exists():
@@ -167,33 +178,40 @@ class ColdStorageArchiver:
             with zipfile.ZipFile(archive_path, mode="r") as zf:
                 manifest = None
                 if cls.MANIFEST_NAME in zf.namelist():
-                    manifest = json.loads(zf.read(cls.MANIFEST_NAME).decode("utf-8"))
+                    try:
+                        manifest = json.loads(zf.read(cls.MANIFEST_NAME).decode("utf-8"))
+                    except Exception:
+                        pass
 
                 for member in zf.infolist():
                     if member.filename == cls.MANIFEST_NAME:
                         continue
 
+                    entry = None
+                    if manifest:
+                        entry = next((f for f in manifest.get("files", []) if f["archive_name"] == member.filename), None)
+
                     if target_dir:
                         dest = target_dir / member.filename
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        with zf.open(member) as source, open(dest, "wb") as target:
-                            target.write(source.read())
-                        restored_files.append(str(dest))
-                    elif manifest:
-                        # Find original path from manifest
-                        entry = next((f for f in manifest.get("files", []) if f["archive_name"] == member.filename), None)
-                        if entry:
-                            dest = Path(entry["original_path"])
-                            dest.parent.mkdir(parents=True, exist_ok=True)
-                            with zf.open(member) as source, open(dest, "wb") as target:
-                                target.write(source.read())
-                            restored_files.append(str(dest))
-                        else:
-                            dest = archive_path.parent / member.filename
-                            dest.parent.mkdir(parents=True, exist_ok=True)
-                            with zf.open(member) as source, open(dest, "wb") as target:
-                                target.write(source.read())
-                            restored_files.append(str(dest))
+                    elif entry:
+                        dest = Path(entry["original_path"])
+                    else:
+                        dest = archive_path.parent / member.filename
+
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(member) as source, open(dest, "wb") as target:
+                        target.write(source.read())
+
+                    # Restore original timestamp if recorded
+                    if entry and entry.get("mtime"):
+                        try:
+                            dt = datetime.fromisoformat(entry["mtime"])
+                            ts = dt.timestamp()
+                            os.utime(dest, (ts, ts))
+                        except Exception:
+                            pass
+
+                    restored_files.append(str(dest))
 
             return {
                 "success": True,

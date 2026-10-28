@@ -1,6 +1,7 @@
 """
 Windows Explorer Context Menu Integration (Shell Extension).
-Enables right-click actions on folders without requiring Administrator privileges.
+Enables right-click actions on folders and background folder spaces without requiring Administrator privileges.
+Enhanced with Background Context Menu registration (%V) and shell icons.
 """
 
 import sys
@@ -36,9 +37,10 @@ class WindowsShellIntegration:
 
     @classmethod
     def install(cls, python_exe: Optional[str] = None, main_script: Optional[str] = None) -> Dict[str, Any]:
-        """
+        r"""
         Installs context menu entries under HKCU:
-        Right-click on any folder -> 'Smart File Organizer'
+        1. Right-click on any folder (`Directory\shell`)
+        2. Right-click on empty background space inside any folder (`Directory\Background\shell`)
         """
         if not cls.is_supported():
             return {"success": False, "message": "Context menu integration is only supported on Windows."}
@@ -53,8 +55,8 @@ class WindowsShellIntegration:
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, cls.REG_PATH) as key:
                 winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "📂 Smart File Organizer")
                 winreg.SetValueEx(key, "SubCommands", 0, winreg.REG_SZ, "")
+                winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, "shell32.dll,264")
 
-            # Sub-commands
             shell_key_path = f"{cls.REG_PATH}\\shell"
 
             # Action 1: Smart Organize
@@ -75,9 +77,27 @@ class WindowsShellIntegration:
                 with winreg.CreateKey(sub3, "command") as cmd3:
                     winreg.SetValueEx(cmd3, "", 0, winreg.REG_SZ, f'"{py_exe}" "{script}" --source "%1" --gui')
 
+            # 2. Register folder background context menu (%V = current directory)
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, cls.REG_BG_PATH) as bg_key:
+                winreg.SetValueEx(bg_key, "", 0, winreg.REG_SZ, "📂 Smart File Organizer")
+                winreg.SetValueEx(bg_key, "SubCommands", 0, winreg.REG_SZ, "")
+                winreg.SetValueEx(bg_key, "Icon", 0, winreg.REG_SZ, "shell32.dll,264")
+
+            bg_shell_path = f"{cls.REG_BG_PATH}\\shell"
+
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{bg_shell_path}\\1_Organize") as bg_sub1:
+                winreg.SetValueEx(bg_sub1, "", 0, winreg.REG_SZ, "🧹 Smart Organize Here")
+                with winreg.CreateKey(bg_sub1, "command") as bg_cmd1:
+                    winreg.SetValueEx(bg_cmd1, "", 0, winreg.REG_SZ, f'"{py_exe}" "{script}" --source "%V"')
+
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{bg_shell_path}\\2_GUI") as bg_sub2:
+                winreg.SetValueEx(bg_sub2, "", 0, winreg.REG_SZ, "🖥️ Open in SFO GUI")
+                with winreg.CreateKey(bg_sub2, "command") as bg_cmd2:
+                    winreg.SetValueEx(bg_cmd2, "", 0, winreg.REG_SZ, f'"{py_exe}" "{script}" --source "%V" --gui')
+
             return {
                 "success": True,
-                "message": "Windows Explorer context menu successfully installed for current user."
+                "message": "Windows Explorer folder & background context menu successfully installed for current user."
             }
         except Exception as e:
             return {"success": False, "message": f"Failed to register context menu: {str(e)}"}
@@ -102,9 +122,12 @@ class WindowsShellIntegration:
                 winreg.DeleteKey(root, subkey)
             except FileNotFoundError:
                 pass
+            except Exception:
+                pass
 
         try:
             delete_key_recursive(winreg.HKEY_CURRENT_USER, cls.REG_PATH)
-            return {"success": True, "message": "Context menu successfully uninstalled."}
+            delete_key_recursive(winreg.HKEY_CURRENT_USER, cls.REG_BG_PATH)
+            return {"success": True, "message": "Context menu uninstalled successfully."}
         except Exception as e:
-            return {"success": False, "message": f"Failed to uninstall: {str(e)}"}
+            return {"success": False, "message": f"Failed to uninstall context menu: {str(e)}"}

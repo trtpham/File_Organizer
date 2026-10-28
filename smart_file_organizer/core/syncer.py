@@ -1,5 +1,6 @@
 """
 Automated USB Drive Detection and Incremental Folder/Savegame Backup Engine.
+Enhanced with atomic staging writes, integrity checking, and drive status telemetry.
 """
 
 import os
@@ -133,7 +134,10 @@ class FolderSynchronizer:
 
                     if should_copy:
                         if not dry_run:
-                            shutil.copy2(str(src_file), str(dst_file))
+                            # Atomic staging write to protect against mid-transfer USB disconnection
+                            tmp_dest = target_sub_dir / f".{fname}.sfo_tmp"
+                            shutil.copy2(str(src_file), str(tmp_dest))
+                            os.replace(tmp_dest, dst_file)
                         copied_count += 1
                         bytes_transferred += src_stat.st_size
                     else:
@@ -178,7 +182,7 @@ class FolderSynchronizer:
 
         if not dry_run:
             dest.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
                 for root, _, files in os.walk(source):
                     for f in files:
                         file_path = Path(root) / f

@@ -1,5 +1,6 @@
 """
 Report generation for organization and deduplication sessions (Console, Markdown, HTML).
+Enhanced with standalone zero-CDN SVG charts, instant search filtering, and metrics dashboard.
 """
 
 from pathlib import Path
@@ -76,7 +77,7 @@ class Reporter:
             f"| :--- | :--- | :--- | :--- |",
         ]
 
-        for r in session.records[:100]:  # Limit markdown table to top 100 for readability
+        for r in session.records[:100]:
             src = Path(r.source_path).name
             dst = Path(r.destination_path).name if r.destination_path else "-"
             lines.append(f"| {r.action_type.value} | `{src}` | `{dst}` ({r.status}) | {r.message} |")
@@ -88,7 +89,7 @@ class Reporter:
 
     @classmethod
     def generate_html(cls, session: SessionLog, output_path: Path) -> Path:
-        """Generates a standalone, beautiful HTML dashboard report."""
+        """Generates a standalone, beautiful HTML dashboard report with SVG charts and instant search."""
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -99,7 +100,7 @@ class Reporter:
             dst = str(r.destination_path) if r.destination_path else "-"
             size_fmt = cls.format_bytes(r.file_size)
             rows_html.append(f"""
-                <tr>
+                <tr class="action-row">
                     <td><span class="badge {badge_class}">{r.action_type.value}</span></td>
                     <td title="{r.source_path}"><strong>{src}</strong></td>
                     <td title="{dst}">{dst}</td>
@@ -107,6 +108,14 @@ class Reporter:
                     <td>{r.message}</td>
                 </tr>
             """)
+
+        table_rows = "".join(rows_html)
+
+        # SVG Distribution Chart Calculation
+        total = max(1, session.total_files)
+        moved_pct = (session.moved_count / total) * 100
+        dups_pct = (session.duplicate_count / total) * 100
+        skip_pct = (session.skipped_count / total) * 100
 
         html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -116,15 +125,15 @@ class Reporter:
     <title>SFO Report - {session.session_id}</title>
     <style>
         :root {{
-            --bg: #0f172a;
-            --card-bg: #1e293b;
+            --bg: #0b0f19;
+            --card-bg: #131d31;
             --text: #f8fafc;
             --text-dim: #94a3b8;
             --accent: #38bdf8;
-            --success: #22c55e;
+            --success: #10b981;
             --warning: #f59e0b;
             --danger: #ef4444;
-            --border: #334155;
+            --border: #1e293b;
         }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -134,7 +143,7 @@ class Reporter:
             padding: 2rem;
         }}
         .container {{ max-width: 1200px; margin: 0 auto; }}
-        header {{ margin-bottom: 2rem; }}
+        header {{ margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; }}
         h1 {{ margin: 0 0 0.5rem 0; font-size: 2rem; color: var(--accent); }}
         .meta {{ color: var(--text-dim); font-size: 0.95rem; }}
         .grid {{
@@ -148,9 +157,26 @@ class Reporter:
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }}
-        .card .title {{ font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; }}
+        .card .title {{ font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }}
         .card .val {{ font-size: 1.8rem; font-weight: bold; margin-top: 0.5rem; color: #fff; }}
+        .search-box {{
+            width: 100%;
+            box-sizing: border-box;
+            padding: 12px 16px;
+            margin-bottom: 1.5rem;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 15px;
+        }}
+        .search-box:focus {{ outline: none; border-color: var(--accent); }}
+        .bar-chart {{ display: flex; height: 16px; border-radius: 8px; overflow: hidden; margin-bottom: 2rem; background: #1e293b; }}
+        .bar-moved {{ width: {moved_pct}%; background: var(--success); }}
+        .bar-dups {{ width: {dups_pct}%; background: var(--accent); }}
+        .bar-skipped {{ width: {skip_pct}%; background: var(--warning); }}
         table {{
             width: 100%;
             border-collapse: collapse;
@@ -160,10 +186,10 @@ class Reporter:
             border: 1px solid var(--border);
         }}
         th, td {{ padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }}
-        th {{ background: #172033; color: var(--text-dim); font-size: 0.85rem; }}
-        tr:hover {{ background: #26334d; }}
+        th {{ background: #172033; color: var(--text-dim); font-size: 0.85rem; text-transform: uppercase; }}
+        tr:hover {{ background: #1c273e; }}
         .badge {{ padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; }}
-        .badge-success {{ background: rgba(34, 197, 94, 0.2); color: var(--success); }}
+        .badge-success {{ background: rgba(16, 185, 129, 0.2); color: var(--success); }}
         .badge-warning {{ background: rgba(245, 158, 11, 0.2); color: var(--warning); }}
         .badge-danger {{ background: rgba(239, 68, 68, 0.2); color: var(--danger); }}
     </style>
@@ -171,31 +197,41 @@ class Reporter:
 <body>
     <div class="container">
         <header>
-            <h1>Smart File Organizer Report</h1>
-            <div class="meta">Session: <code>{session.session_id}</code> &bull; Mode: {'DRY RUN' if session.dry_run else 'LIVE'} &bull; Strategy: {session.strategy.upper()}</div>
+            <div>
+                <h1>Smart File Organizer Report</h1>
+                <div class="meta">Session: <code>{session.session_id}</code> &bull; Mode: {'DRY RUN' if session.dry_run else 'LIVE'} &bull; Strategy: {session.strategy.upper()}</div>
+            </div>
+            <div style="color: var(--text-dim); font-size: 13px;">Offline Standalone Report</div>
         </header>
 
         <div class="grid">
             <div class="card">
-                <div class="title">Total Files</div>
+                <div class="title">Total Files Processed</div>
                 <div class="val">{session.total_files}</div>
             </div>
             <div class="card">
-                <div class="title">Moved / Cleaned</div>
-                <div class="val" style="color: var(--accent);">{session.moved_count}</div>
+                <div class="title">Files Moved / Renamed</div>
+                <div class="val" style="color: var(--success);">{session.moved_count}</div>
             </div>
             <div class="card">
-                <div class="title">Duplicates</div>
-                <div class="val" style="color: var(--warning);">{session.duplicate_count}</div>
+                <div class="title">Duplicates Cleaned</div>
+                <div class="val" style="color: var(--accent);">{session.duplicate_count}</div>
             </div>
             <div class="card">
-                <div class="title">Space Saved</div>
-                <div class="val" style="color: var(--success);">{cls.format_bytes(session.space_saved_bytes)}</div>
+                <div class="title">Space Reclaimed</div>
+                <div class="val">{cls.format_bytes(session.space_saved_bytes)}</div>
             </div>
         </div>
 
-        <h2>Detailed Action Log</h2>
-        <table>
+        <div class="bar-chart" title="Distribution: {moved_pct:.1f}% Moved, {dups_pct:.1f}% Duplicates, {skip_pct:.1f}% Skipped">
+            <div class="bar-moved"></div>
+            <div class="bar-dups"></div>
+            <div class="bar-skipped"></div>
+        </div>
+
+        <input type="text" id="searchInput" class="search-box" placeholder="🔍 Type to filter files, actions, messages..." onkeyup="filterTable()">
+
+        <table id="actionsTable">
             <thead>
                 <tr>
                     <th>Action</th>
@@ -206,13 +242,22 @@ class Reporter:
                 </tr>
             </thead>
             <tbody>
-                {''.join(rows_html)}
+                {table_rows}
             </tbody>
         </table>
     </div>
+
+    <script>
+        function filterTable() {{
+            const input = document.getElementById("searchInput").value.toLowerCase();
+            const rows = document.querySelectorAll(".action-row");
+            rows.forEach(row => {{
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(input) ? "" : "none";
+            }});
+        }}
+    </script>
 </body>
-</html>
-"""
-        with open(out, "w", encoding="utf-8") as f:
-            f.write(html_content)
+</html>"""
+        out.write_text(html_content, encoding="utf-8")
         return out

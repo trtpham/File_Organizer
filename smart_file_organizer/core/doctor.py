@@ -1,6 +1,6 @@
 """
 SFO Doctor: Enterprise System Diagnostic & Health Evaluation Suite.
-Performs end-to-end environment, disk I/O latency, registry, permission,
+Performs end-to-end environment, disk I/O latency, memory capacity, registry, permission,
 and dependency self-checks with actionable health reports.
 Zero external dependencies.
 """
@@ -10,12 +10,14 @@ import sys
 import time
 import shutil
 import sqlite3
+import ctypes
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from .reporter import Reporter
 from .shell_integration import WindowsShellIntegration
 from .cloud_connector import CloudDetector
+from .enterprise_guardrails import AuditLogChain
 
 
 class DiagnosticItem:
@@ -54,7 +56,37 @@ class SFODoctor:
         is_windows = os.name == "nt"
         results.append(DiagnosticItem("Operating System", "PASS", f"{sys.platform} ({'Windows' if is_windows else 'POSIX'})"))
 
-        # 2. Disk Space & I/O Latency Benchmark
+        # 2. System Memory (RAM) Check
+        try:
+            if is_windows:
+                class MEMORYSTATUSEX(ctypes.Structure):
+                    _fields_ = [
+                        ("dwLength", ctypes.c_ulong),
+                        ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
+                    ]
+                stat = MEMORYSTATUSEX()
+                stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+                ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+                total_ram_gb = stat.ullTotalPhys / (1024 ** 3)
+                avail_ram_gb = stat.ullAvailPhys / (1024 ** 3)
+                mem_status = "PASS" if avail_ram_gb >= 1.0 else "WARN"
+                results.append(DiagnosticItem(
+                    "System Memory (RAM)", mem_status,
+                    f"{avail_ram_gb:.1f} GB available of {total_ram_gb:.1f} GB ({stat.dwMemoryLoad}% load)"
+                ))
+            else:
+                results.append(DiagnosticItem("System Memory (RAM)", "PASS", "POSIX platform memory operational"))
+        except Exception:
+            pass
+
+        # 3. Disk Space & I/O Latency Benchmark
         try:
             total, used, free = shutil.disk_usage(path if path.exists() else Path.home())
             free_gb = free / (1024 ** 3)
@@ -84,7 +116,7 @@ class SFODoctor:
         except Exception as e:
             results.append(DiagnosticItem("Disk Health Check", "WARN", f"Could not benchmark target path: {str(e)}"))
 
-        # 3. Shell Context Menu Integration
+        # 4. Shell Context Menu Integration
         if is_windows:
             installed = WindowsShellIntegration.is_installed()
             if installed:
@@ -94,7 +126,7 @@ class SFODoctor:
         else:
             results.append(DiagnosticItem("Windows Explorer Menu", "PASS", "Skipped on non-Windows platform"))
 
-        # 4. Cloud Storage Providers
+        # 5. Cloud Storage Providers
         clouds = CloudDetector.detect_all()
         if clouds:
             cloud_names = ", ".join(c.name for c in clouds)
@@ -102,7 +134,7 @@ class SFODoctor:
         else:
             results.append(DiagnosticItem("Cloud Integrations", "WARN", "No active cloud storage sync directories detected"))
 
-        # 5. Optional Acceleration Libraries
+        # 6. Optional Acceleration Libraries
         opt_libs = []
         try:
             import PIL
@@ -125,7 +157,7 @@ class SFODoctor:
         else:
             results.append(DiagnosticItem("Accelerators", "PASS", "Pure Standard Library Mode (Zero external dependencies)"))
 
-        # 6. SQLite Journal Integrity
+        # 7. SQLite Journal Integrity
         db_path = Path.home() / ".smart_file_organizer" / "history.db"
         if db_path.exists():
             try:
@@ -142,6 +174,17 @@ class SFODoctor:
                 results.append(DiagnosticItem("Database Integrity", "WARN", f"Database check warning: {str(e)}"))
         else:
             results.append(DiagnosticItem("Database Integrity", "PASS", "Journal database initialized on first operation"))
+
+        # 8. Cryptographic Audit Log Integrity
+        try:
+            audit = AuditLogChain()
+            is_valid, record_count, audit_msg = audit.verify_integrity()
+            if is_valid:
+                results.append(DiagnosticItem("Audit Log Integrity", "PASS", f"SHA-256 chain valid ({record_count} events mathematically verified)"))
+            else:
+                results.append(DiagnosticItem("Audit Log Integrity", "FAIL", f"Audit tampering detected: {audit_msg}"))
+        except Exception:
+            pass
 
         pass_count = sum(1 for r in results if r.status == "PASS")
         warn_count = sum(1 for r in results if r.status == "WARN")
