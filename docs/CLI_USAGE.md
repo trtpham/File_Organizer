@@ -46,6 +46,14 @@ python main.py [OPTIONS]
 | | `--lan-share` | Launch local Wi-Fi wireless file exchange server | `False` |
 | | `--lan-port PORT` | Port for LAN Drop server | `8080` |
 | | `--lan-pin PIN` | Optional access PIN for LAN Drop server | `None` |
+| | `--doctor` | Run comprehensive SFO Doctor health & latency diagnostics | `False` |
+| | `--lang CODE` | Language localization: `en` (English) or `vi` (Tiếng Việt) | `en` |
+| | `--enable-autostart` | Enable Windows startup on login | `False` |
+| | `--disable-autostart` | Remove application from Windows startup | `False` |
+| | `--verify-audit` | Verify cryptographic SHA-256 audit log integrity | `False` |
+| | `--schedule-daily HH:MM`| Schedule automated daily background cleanup via schtasks | `None` |
+| | `--list-tasks` | List all active SFO scheduled tasks in Windows Task Scheduler | `False` |
+| | `--delete-task NAME` | Remove a scheduled task from Windows Task Scheduler | `None` |
 | | `--undo [ID]` | Rollback session (`latest` if ID is omitted) | `None` |
 | | `--history` | List all previous organization sessions | `False` |
 | `-w` | `--watch` | Run background watcher daemon with debounce | `False` |
@@ -158,7 +166,37 @@ python main.py --source "C:/Users/Raven/Downloads" --lan-share
 python main.py --source "D:/Share" --lan-share --lan-port 9000 --lan-pin 4821
 ```
 
-### 13. Undo Previous Operation (100% Rollback)
+### 13. SFO Doctor System Diagnostics
+```bash
+# Run comprehensive workstation disk latency, permission, and health checks:
+python main.py --doctor
+```
+
+### 14. Cryptographic Audit Chain Verification
+```bash
+# Mathematically verify that the tamper-evident SHA-256 audit log has not been altered:
+python main.py --verify-audit
+```
+
+### 15. Native Windows Task Scheduler Automation
+```bash
+# Schedule daily automated organization at 18:00 (runs silently even when GUI is closed):
+python main.py --source "C:/Users/Raven/Downloads" --schedule-daily 18:00
+
+# View all registered SFO automated tasks:
+python main.py --list-tasks
+
+# Delete scheduled task:
+python main.py --delete-task DailySweep
+```
+
+### 16. Multi-Language CLI Output (Vietnamese)
+```bash
+# Run commands with Vietnamese localization:
+python main.py --source "C:/Users/Raven/Downloads" --dry-run --lang vi
+```
+
+### 17. Undo Previous Operation (100% Rollback)
 ```bash
 python main.py --undo
 ```

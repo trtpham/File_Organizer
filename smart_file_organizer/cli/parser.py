@@ -266,6 +266,52 @@ Examples:
         help="Optional access PIN for LAN Drop server"
     )
 
+    # Enterprise & System Diagnostics
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run comprehensive SFO Doctor system health, latency & permission diagnostics"
+    )
+    parser.add_argument(
+        "--lang",
+        choices=["en", "vi"],
+        default=None,
+        help="Select language localization (en: English, vi: Vietnamese / Tieng Viet)"
+    )
+    parser.add_argument(
+        "--enable-autostart",
+        action="store_true",
+        help="Configure Smart File Organizer to start automatically on Windows boot"
+    )
+    parser.add_argument(
+        "--disable-autostart",
+        action="store_true",
+        help="Remove Smart File Organizer from Windows boot startup"
+    )
+    parser.add_argument(
+        "--verify-audit",
+        action="store_true",
+        help="Mathematically verify cryptographic SHA-256 audit log chain integrity"
+    )
+    parser.add_argument(
+        "--schedule-daily",
+        type=str,
+        default=None,
+        metavar="HH:MM",
+        help="Schedule daily automated background cleanup in Windows Task Scheduler (e.g. '18:00')"
+    )
+    parser.add_argument(
+        "--list-tasks",
+        action="store_true",
+        help="List all active SFO scheduled tasks in Windows Task Scheduler"
+    )
+    parser.add_argument(
+        "--delete-task",
+        type=str,
+        default=None,
+        help="Remove a scheduled task from Windows Task Scheduler"
+    )
+
     # Undo and history
     parser.add_argument(
         "--undo",

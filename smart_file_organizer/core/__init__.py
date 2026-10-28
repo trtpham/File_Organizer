@@ -27,6 +27,11 @@ from .secret_scanner import SecretScanner, SecretFinding
 from .archiver import ColdStorageAnalyzer, ColdStorageArchiver
 from .cloud_connector import CloudProvider, CloudDetector, CloudSyncManager
 from .lan_share import LANShareServer, LANShareHandler, get_local_ip
+from .enterprise_guardrails import EnterpriseGuardrails, AuditLogChain
+from .doctor import SFODoctor, DiagnosticItem
+from .i18n import I18n, _t
+from .tray_daemon import WindowsStartupManager, DesktopNotifier
+from .scheduler import WindowsTaskScheduler
 
 __all__ = [
     "FileInfo",
@@ -73,4 +78,13 @@ __all__ = [
     "LANShareServer",
     "LANShareHandler",
     "get_local_ip",
+    "EnterpriseGuardrails",
+    "AuditLogChain",
+    "SFODoctor",
+    "DiagnosticItem",
+    "I18n",
+    "_t",
+    "WindowsStartupManager",
+    "DesktopNotifier",
+    "WindowsTaskScheduler",
 ]

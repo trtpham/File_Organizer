@@ -32,7 +32,7 @@ class Color:
 def print_banner() -> None:
     banner = f"""
 {Color.CYAN}{Color.BOLD}======================================================================
-  SMART FILE ORGANIZER (SFO) v2.3 - Enterprise Edition
+  SMART FILE ORGANIZER (SFO) v3.0 - Commercial Enterprise Edition
   Automated Cleanup, Deep Deduplication & Safe 100% Rollback
 ======================================================================{Color.RESET}
 """

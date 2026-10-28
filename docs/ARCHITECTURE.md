@@ -7,13 +7,23 @@
 
 ```
 +----------------------------------------------------------------------------------+
-|                            SMART FILE ORGANIZER v2.3                             |
+|                 SMART FILE ORGANIZER v3.0 - COMMERCIAL EDITION                   |
 +----------------------------------------------------------------------------------+
 |                                  INTERFACES                                      |
 |  smart_file_organizer/gui/                        smart_file_organizer/cli/      |
-|  - app.py (8-Tab Modern Tkinter Dark UI)          - parser.py (argparse CLI)     |
+|  - app.py (9-Tab Localized Tkinter Dark UI)       - parser.py (argparse CLI)     |
 |  - components.py (StatCard, Treeview)             - formatter.py (ANSI tables)   |
 |  - theme.py (Modern Slate Theme)                  - app.py (CLI Router)          |
++----------------------------------------------------------------------------------+
+                                        |
+                                        v
++----------------------------------------------------------------------------------+
+|                         ENTERPRISE & PLATFORM SERVICES                           |
+|  ├── enterprise_guardrails.py -> Path blacklist, blast radius & SHA-256 audit log|
+|  ├── doctor.py                -> System health & disk I/O latency diagnostics    |
+|  ├── i18n.py                  -> Multilingual localization (English & Tiếng Việt)|
+|  ├── tray_daemon.py           -> Windows Startup (HKCU Run) & Toast Notifications|
+|  └── scheduler.py             -> Windows Task Scheduler (schtasks) integration   |
 +----------------------------------------------------------------------------------+
                                         |
                                         v

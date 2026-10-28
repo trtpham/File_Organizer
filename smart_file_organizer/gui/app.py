@@ -29,6 +29,11 @@ from ..core.secret_scanner import SecretScanner, SecretFinding
 from ..core.archiver import ColdStorageAnalyzer, ColdStorageArchiver
 from ..core.cloud_connector import CloudDetector, CloudProvider, CloudSyncManager
 from ..core.lan_share import LANShareServer, get_local_ip
+from ..core.enterprise_guardrails import EnterpriseGuardrails, AuditLogChain
+from ..core.doctor import SFODoctor
+from ..core.i18n import I18n, _t
+from ..core.tray_daemon import WindowsStartupManager, DesktopNotifier
+from ..core.scheduler import WindowsTaskScheduler
 from ..core.models import (
     OrganizeStrategy, ActionRecord, DuplicateGroup,
     VisualDuplicateGroup, SyncProfile, SyncMode, FileInfo
@@ -40,9 +45,9 @@ class SmartFileOrganizerApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Smart File Organizer v2.3 - Enterprise Edition")
-        self.geometry("1100x740")
-        self.minsize(900, 600)
+        self.title("Smart File Organizer v3.0 - Enterprise Edition")
+        self.geometry("1120x760")
+        self.minsize(920, 620)
 
         self.config_manager = ConfigManager()
         self.undo_manager = UndoManager()
@@ -97,6 +102,7 @@ class SmartFileOrganizerApp(tk.Tk):
         self.tab_storage = ttk.Frame(self.notebook, padding=14)
         self.tab_sync = ttk.Frame(self.notebook, padding=14)
         self.tab_security = ttk.Frame(self.notebook, padding=14)
+        self.tab_doctor = ttk.Frame(self.notebook, padding=14)
         self.tab_history = ttk.Frame(self.notebook, padding=14)
         self.tab_settings = ttk.Frame(self.notebook, padding=14)
 
@@ -106,6 +112,7 @@ class SmartFileOrganizerApp(tk.Tk):
         self.notebook.add(self.tab_storage, text="  📊 Storage Treemap  ")
         self.notebook.add(self.tab_sync, text="  💾 Sync, Cloud & LAN  ")
         self.notebook.add(self.tab_security, text="  🛡️ Security & Junk  ")
+        self.notebook.add(self.tab_doctor, text="  🩺 Doctor & Health  ")
         self.notebook.add(self.tab_history, text="  ⏪ Undo & History  ")
         self.notebook.add(self.tab_settings, text="  ⚙️ Settings & Shell  ")
 
@@ -115,6 +122,7 @@ class SmartFileOrganizerApp(tk.Tk):
         self._build_storage_tab()
         self._build_sync_tab()
         self._build_security_tab()
+        self._build_doctor_tab()
         self._build_history_tab()
         self._build_settings_tab()
 
@@ -1124,7 +1132,50 @@ class SmartFileOrganizerApp(tk.Tk):
         messagebox.showinfo("Sync Finished", res["message"])
 
     # -------------------------------------------------------------
-    # TAB 5: Undo & History
+    # TAB 7: Doctor & System Health
+    # -------------------------------------------------------------
+    def _build_doctor_tab(self) -> None:
+        panel = ttk.Frame(self.tab_doctor, style="Card.TFrame", padding=14)
+        panel.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(panel, text="🩺 SFO Doctor System Diagnostics", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(
+            panel,
+            text="Performs automated self-diagnostics for disk headroom, I/O flush latency, registry integration, and system integrity.",
+            style="Muted.TLabel"
+        ).pack(anchor="w", pady=(0, 8))
+
+        row = ttk.Frame(panel, style="Card.TFrame")
+        row.pack(fill="x")
+
+        self.doctor_status_var = tk.StringVar(value="System Status: Ready to diagnose")
+        ttk.Label(row, textvariable=self.doctor_status_var, style="Title.TLabel", font=(Theme.FONT_FAMILY, 10, "bold")).pack(side="left")
+
+        btn_run_doctor = ttk.Button(row, text="🩺 Run Diagnostics", style="Primary.TButton", command=self._on_run_doctor)
+        btn_run_doctor.pack(side="right")
+
+        cols = ["check", "status", "message"]
+        heads = ["Diagnostic Item", "Result", "Evaluation & Details"]
+        self.doctor_table = ScrollableTreeview(self.tab_doctor, cols, heads)
+        self.doctor_table.pack(fill="both", expand=True)
+
+    def _on_run_doctor(self) -> None:
+        self.status_var.set("Running system self-diagnostics...")
+        self.update_idletasks()
+
+        report = SFODoctor.run_full_diagnosis()
+        self.doctor_table.clear()
+
+        for c in report["checks"]:
+            self.doctor_table.insert_row([c["name"], c["status"], c["message"]])
+
+        status_text = f"System Status: {report['overall_status']} ({report['pass_count']} PASS, {report['warn_count']} WARN, {report['fail_count']} FAIL)"
+        self.doctor_status_var.set(status_text)
+        self.status_var.set("Doctor diagnosis complete.")
+        messagebox.showinfo("Diagnostic Report", f"{status_text}\n\nSee table below for full component health details.")
+
+    # -------------------------------------------------------------
+    # TAB 8: Undo & History
     # -------------------------------------------------------------
     def _build_history_tab(self) -> None:
         top_bar = ttk.Frame(self.tab_history)
@@ -1190,12 +1241,47 @@ class SmartFileOrganizerApp(tk.Tk):
             messagebox.showerror("Rollback Error", res["message"])
 
     # -------------------------------------------------------------
-    # TAB 8: Rules & Settings
+    # TAB 9: Enterprise Settings & Shell
     # -------------------------------------------------------------
     def _build_settings_tab(self) -> None:
-        # Shell Integration Card
+        # 1. General & Language Card
+        gen_card = ttk.Frame(self.tab_settings, style="Card.TFrame", padding=16)
+        gen_card.pack(fill="x", pady=(0, 12))
+
+        ttk.Label(gen_card, text="Enterprise System Preferences", style="Header.TLabel").pack(anchor="w", pady=(0, 6))
+
+        row_gen = ttk.Frame(gen_card, style="Card.TFrame")
+        row_gen.pack(fill="x", pady=(0, 8))
+
+        ttk.Label(row_gen, text="Interface Language / Ngôn ngữ:", style="Card.TLabel").pack(side="left", padx=(0, 8))
+        self.lang_var = tk.StringVar(value="English (en)" if I18n.get_language() == "en" else "Tiếng Việt (vi)")
+        combo_lang = ttk.Combobox(
+            row_gen,
+            textvariable=self.lang_var,
+            values=["English (en)", "Tiếng Việt (vi)"],
+            state="readonly",
+            width=18
+        )
+        combo_lang.pack(side="left", padx=(0, 16))
+        combo_lang.bind("<<ComboboxSelected>>", self._on_language_change)
+
+        # Autostart switch
+        self.autostart_var = tk.BooleanVar(value=WindowsStartupManager.is_autostart_enabled())
+        chk_autostart = ttk.Checkbutton(
+            row_gen,
+            text="Start with Windows on boot (Daemon mode)",
+            variable=self.autostart_var,
+            command=self._on_toggle_autostart
+        )
+        chk_autostart.pack(side="left", padx=(0, 16))
+
+        # Audit Chain check
+        btn_audit = ttk.Button(row_gen, text="🔒 Verify SHA-256 Audit Log", style="Secondary.TButton", command=self._on_verify_audit)
+        btn_audit.pack(side="right")
+
+        # 2. Shell Integration Card
         shell_card = ttk.Frame(self.tab_settings, style="Card.TFrame", padding=16)
-        shell_card.pack(fill="x", pady=(0, 14))
+        shell_card.pack(fill="x", pady=(0, 12))
 
         ttk.Label(shell_card, text="Windows Explorer Context Menu Integration", style="Header.TLabel").pack(anchor="w", pady=(0, 4))
         ttk.Label(
@@ -1218,8 +1304,9 @@ class SmartFileOrganizerApp(tk.Tk):
         btn_install_shell = ttk.Button(row_shell, text="✨ Register Context Menu", style="Primary.TButton", command=self._on_install_shell)
         btn_install_shell.pack(side="right")
 
+        # 3. Category File Formats Card
         info_card = ttk.Frame(self.tab_settings, style="Card.TFrame", padding=16)
-        info_card.pack(fill="x", pady=(0, 14))
+        info_card.pack(fill="x", pady=(0, 12))
 
         ttk.Label(info_card, text="Category File Formats", style="Header.TLabel").pack(anchor="w", pady=(0, 6))
         ttk.Label(
@@ -1236,6 +1323,29 @@ class SmartFileOrganizerApp(tk.Tk):
 
         for cat, exts in self.config_manager.categories.items():
             self.settings_table.insert_row([cat, ", ".join(exts)])
+
+    def _on_language_change(self, event=None) -> None:
+        sel = self.lang_var.get()
+        new_lang = "vi" if "vi" in sel.lower() else "en"
+        I18n.set_language(new_lang)
+        self.status_var.set(f"Language set to: {sel}")
+        messagebox.showinfo("Language Updated", f"Application language set to {sel}.\nNew actions and messages will use this language.")
+
+    def _on_toggle_autostart(self) -> None:
+        if self.autostart_var.get():
+            res = WindowsStartupManager.enable_autostart()
+        else:
+            res = WindowsStartupManager.disable_autostart()
+        self.autostart_var.set(WindowsStartupManager.is_autostart_enabled())
+        messagebox.showinfo("Windows Startup", res["message"])
+
+    def _on_verify_audit(self) -> None:
+        chain = AuditLogChain()
+        is_valid, count, msg = chain.verify_integrity()
+        if is_valid:
+            messagebox.showinfo("Audit Integrity Validated", f"{msg}\n\nCryptographic SHA-256 chain has zero tampering.")
+        else:
+            messagebox.showerror("Integrity Violation", msg)
 
     def _update_shell_status(self) -> None:
         if not WindowsShellIntegration.is_supported():

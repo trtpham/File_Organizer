@@ -1,17 +1,42 @@
-# Smart File Organizer 📂 (Enterprise Edition v2.3)
+# Smart File Organizer 📂 (Commercial Enterprise Edition v3.0)
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Status](https://img.shields.io/badge/tests-46%2F46%20passed-success.svg)](tests/)
+[![Tests Status](https://img.shields.io/badge/tests-54%2F54%20passed-success.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/architecture-Clean%20%2F%20Zero--Dependency-orange.svg)](docs/ARCHITECTURE.md)
 
-**Smart File Organizer (SFO)** is a robust, production-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, analyze, wirelessly transfer, and optimize your file system safely and efficiently.
+**Smart File Organizer (SFO)** is a robust, enterprise-grade desktop and command-line utility designed to automatically declutter, categorize, batch-rename, sync, analyze, wirelessly transfer, and optimize your file system safely and efficiently.
 
-Featuring an intuitive **Modern Dark Theme Desktop GUI (8 Dedicated Tabs)** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero mandatory external dependencies** — running on the pure Python Standard Library with optional high-fidelity extensions for Pillow and PyMuPDF.
+Featuring an intuitive **Modern Dark Theme Desktop GUI (9 Dedicated Tabs)** and a feature-complete **Interactive CLI**, SFO operates out-of-the-box with **zero mandatory external dependencies** — running on the pure Python Standard Library with optional high-fidelity extensions for Pillow and PyMuPDF.
 
 ---
 
 ## 🌟 Highlights & Key Capabilities
+
+- 🩺 **System Doctor & Diagnostic Engine (`sfo --doctor`):**
+  - Instant pre-flight checks: Python environment, SQLite database lock integrity, disk storage headroom, write permissions, and audit log tamper detection.
+  - Generates actionable diagnostics (`PASS`, `WARN`, `FAIL`) and JSON reports for IT automation.
+
+- 🛡️ **Enterprise Safety Guardrails & Blast Radius Control:**
+  - Prevents disastrous mistakes: automatically blocks operations targeting root drives (`C:\`, `D:\`) or system directories (`Windows`, `System32`, `Program Files`, `/usr`, `/etc`).
+  - Strict blast radius thresholds requiring explicit confirmation (`--force`) before executing changes affecting $\ge 1,000$ files.
+
+- 📜 **Tamper-Evident SHA-256 Audit Log Chain:**
+  - Immutable cryptographic hash chain verifying every executed operation.
+  - Zero-tamper guarantee: detecting any manual log editing or modification (`sfo --verify-audit`).
+
+- 🌐 **Native Internationalization (i18n):**
+  - Full multilingual support with seamless switching between **English (en)** and **Vietnamese (vi)** across both CLI and GUI interfaces.
+
+- ⏰ **OS-Level Task Scheduler & Automation:**
+  - Integrates natively with Windows Task Scheduler (`schtasks.exe`) to configure autonomous daily, hourly, or weekly file organization without third-party services.
+
+- 🔔 **Windows Background Tray & Desktop Toast Notifications:**
+  - Background daemon monitoring with native Windows balloon / toast notifications on completed file organization runs.
+  - One-click Windows startup registration (`HKCU\...\Run`).
+
+- 📦 **Standalone Binary & Portable Packaging:**
+  - Zero-Python-installation deployment: compiles into a standalone `sfo.exe` binary with automated GitHub Actions release packaging.
 
 - 🗄️ **Cold Storage Archiving & Compression Tiering:**
   - Identifies cold files inactive for $\ge N$ days and bundles them into organized ZIP archives.
@@ -86,14 +111,20 @@ Featuring an intuitive **Modern Dark Theme Desktop GUI (8 Dedicated Tabs)** and 
 File_Organizer/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                 # Automated CI test pipeline (Windows, Ubuntu, macOS)
+│       ├── ci.yml                 # Automated CI test pipeline (Windows, Ubuntu, macOS)
+│       └── release.yml            # Automated PyInstaller packaging & GitHub Release CI
 ├── config/
 │   └── default_config.json        # 150+ extension mappings and default configuration
 ├── docs/
 │   ├── PRD.md                     # Product Requirements Document
 │   ├── ARCHITECTURE.md            # Technical Architecture & System Design
 │   ├── CLI_USAGE.md               # Detailed Command-Line Reference Guide
-│   └── GUI_GUIDE.md               # Desktop Graphical User Interface Guide
+│   ├── GUI_GUIDE.md               # Desktop Graphical User Interface Guide
+│   ├── ENTERPRISE_DEPLOYMENT.md   # Deployment, Guardrails & Audit Documentation
+│   ├── DOCTOR.md                  # System Health & Diagnostic Engine Documentation
+│   └── COMMERCIAL_ROADMAP.md      # Commercialization & Scaling Roadmap
+├── scripts/
+│   └── build_exe.py               # Standalone PyInstaller build & ZIP packaging pipeline
 ├── smart_file_organizer/          # Main application package (Clean Architecture)
 │   ├── core/                      # Domain core engine (Zero external UI dependencies)
 │   │   ├── models.py              # FileInfo, ActionRecord, SessionLog, Enums
@@ -111,6 +142,11 @@ File_Organizer/
 │   │   ├── junk_cleaner.py        # Inactive dev bloat cleaner (node_modules, caches)
 │   │   ├── secret_scanner.py      # DLP secret detector (AWS, OpenAI, GitHub, SSH) & quarantine
 │   │   ├── shell_integration.py   # Windows Explorer HKCU right-click context menu manager
+│   │   ├── enterprise_guardrails.py # System path protection & SHA-256 audit log chain
+│   │   ├── doctor.py              # System health check & pre-flight diagnostic engine
+│   │   ├── i18n.py                # Multi-language internationalization (English / Vietnamese)
+│   │   ├── tray_daemon.py         # Windows startup autorun & desktop notifications
+│   │   ├── scheduler.py           # Windows Task Scheduler automation manager
 │   │   ├── smart_filter.py        # PDF text extractor & financial invoice classifier
 │   │   ├── organizer.py           # Organization algorithms (Ext, Date, Size, Regex, Receipts)
 │   │   ├── executor.py            # Transaction execution & collision handling
@@ -124,8 +160,8 @@ File_Organizer/
 │   └── gui/                       # Desktop graphical interface package
 │       ├── theme.py               # Modern Slate Dark Theme for Tkinter/ttk
 │       ├── components.py          # Reusable StatCard, FolderPicker, Treeview
-│       └── app.py                 # 8-Tab Desktop GUI main window
-├── tests/                         # Comprehensive automated test suite (46/46 Tests Pass)
+│       └── app.py                 # 9-Tab Desktop GUI main window
+├── tests/                         # Comprehensive automated test suite (54/54 Tests Pass)
 ├── main.py                        # Unified entrypoint (auto-launches GUI when run directly)
 ├── pyproject.toml                 # Packaging configuration (PEP 621)
 ├── setup.py                       # Support for pip install -e .
@@ -139,18 +175,22 @@ File_Organizer/
 
 ### 1. Prerequisites
 - **Operating System:** Windows 10/11, macOS, or Linux.
-- **Python:** Version 3.10 or later.
+- **Python:** Version 3.10 or later (or run standalone portable `sfo.exe`).
 - **External Dependencies:** **None** (runs entirely with Python's standard library; Pillow/PyMuPDF supported automatically when available).
 
-### 2. Clone the Repository
+### 2. Standalone Binary (Zero-Python Required)
+Download `SmartFileOrganizer_v3.0_Windows_x64.zip` from Releases, unzip anywhere, and run `sfo.exe --gui` or double-click `Launch_GUI.bat`.
+
+### 3. Developer Source Installation
 ```bash
 git clone https://github.com/trtpham/File_Organizer.git
 cd File_Organizer
+python main.py
 ```
 
 ---
 
-## 🖥️ Desktop GUI Usage (8 Dedicated Tabs)
+## 🖥️ Desktop GUI Usage (9 Dedicated Tabs)
 
 Launch the desktop interface simply by running:
 ```bash
@@ -158,7 +198,7 @@ python main.py
 ```
 *(or explicitly: `python main.py --gui`)*
 
-The GUI provides eight dedicated tabs:
+The GUI provides nine dedicated tabs:
 1. **🧹 Organize & Clean:** Select folders, choose strategy, toggle Smart Financial Sort, click **Preview Actions**, and execute.
 2. **🔍 Duplicate Center:** Switch between Exact Hash (SHA-256) and Visual pHash (dHash with threshold slider).
 3. **🏷️ Smart Renamer:** Batch rename files using metadata tokens (`{name}`, `{counter:03d}`, `{date}`, `{camera}`, `{artist}`), casing conversions, and live diff table.
@@ -166,7 +206,8 @@ The GUI provides eight dedicated tabs:
 5. **💾 Sync, Cloud & LAN:** 4 sub-tabs for USB Drive Backup, Cloud Sync (OneDrive/GDrive/Dropbox), Wireless LAN Drop Server, and Cold Storage Archive.
 6. **🛡️ Security & Junk:** Reclaim space by cleaning inactive `node_modules` and scan files for exposed API keys/secrets with quarantine.
 7. **⏪ Undo & History:** View past organization and renaming sessions and click **Undo Selected Session** for instant rollback.
-8. **⚙️ Settings & Shell:** Inspect categories and register the Windows Explorer right-click context menu with one click.
+8. **⚙️ Settings & Shell:** Language switcher (English / Tiếng Việt), Windows autostart toggle, and Windows Explorer context menu registration.
+9. **🩺 Doctor & Health:** System health check verifying disk space, database lock state, Python environment, and cryptographic audit log chain integrity.
 
 ---
 
@@ -189,6 +230,30 @@ The GUI provides eight dedicated tabs:
 - **Wireless LAN Drop (Cross-Device File Exchange):**
   ```bash
   python main.py --source "C:/Users/Raven/Downloads" --lan-share --lan-port 8080
+  ```
+
+- **Run System Doctor Diagnostics:**
+  ```bash
+  python main.py --doctor
+  python main.py --doctor --doctor-json
+  ```
+
+- **Verify Cryptographic SHA-256 Audit Log Chain:**
+  ```bash
+  python main.py --verify-audit
+  ```
+
+- **Schedule Autonomous Daily Organization (Windows Task Scheduler):**
+  ```bash
+  python main.py --schedule-daily 03:00 --source "D:/Downloads"
+  python main.py --list-tasks
+  python main.py --delete-task SFO_Daily_D_Downloads
+  ```
+
+- **Enable / Disable Windows Startup Autorun:**
+  ```bash
+  python main.py --enable-autostart
+  python main.py --disable-autostart
   ```
 
 - **Storage Analysis & Top Files:**
@@ -255,13 +320,18 @@ The GUI provides eight dedicated tabs:
   python main.py --source "C:/Users/Raven/Downloads" --watch
   ```
 
+- **Build Standalone Portable Executable:**
+  ```bash
+  python scripts/build_exe.py
+  ```
+
 For a complete reference of flags and options, see [CLI Reference Guide](docs/CLI_USAGE.md) or run `python main.py --help`.
 
 ---
 
 ## 🧪 Automated Testing
 
-Smart File Organizer includes a comprehensive test suite covering scanner filtering, tiered hashing, perceptual dHash, metadata renaming, USB syncing, smart receipt classification, disk treemap analysis, dev junk cleaner, secret scanning, collision resolution, dry-run simulation, and transaction rollbacks:
+Smart File Organizer includes an enterprise-grade automated test suite covering system diagnostics, safety guardrails, cryptographic audit logs, internationalization, task scheduling, tray notifications, scanner filtering, tiered hashing, perceptual dHash, metadata renaming, USB syncing, smart receipt classification, disk treemap analysis, dev junk cleaner, secret scanning, collision resolution, dry-run simulation, and transaction rollbacks:
 
 ```bash
 python -m pytest -v tests/
@@ -269,54 +339,62 @@ python -m pytest -v tests/
 
 ### Test Results:
 ```text
-tests/test_archiver.py::test_cold_storage_scanning_and_archiving PASSED  [  2%]
-tests/test_cli.py::test_cli_help PASSED                                  [  4%]
-tests/test_cli.py::test_cli_dry_run PASSED                               [  6%]
-tests/test_cli.py::test_cli_history_empty PASSED                         [  8%]
-tests/test_cli.py::test_cli_detect_cloud PASSED                          [ 10%]
-tests/test_cli.py::test_cli_archive_cold_empty PASSED                    [ 13%]
-tests/test_cloud_connector.py::test_cloud_detector_runs_safely PASSED    [ 15%]
-tests/test_cloud_connector.py::test_cloud_sync_manager PASSED            [ 17%]
-tests/test_config.py::test_default_categories_loaded PASSED              [ 19%]
-tests/test_config.py::test_extension_category_lookup PASSED              [ 21%]
-tests/test_config.py::test_ignore_pattern_matching PASSED                [ 23%]
-tests/test_config.py::test_size_bucket_determination PASSED              [ 26%]
-tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 28%]
-tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 30%]
-tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 32%]
-tests/test_executor.py::test_live_execution_moves_files PASSED           [ 34%]
-tests/test_executor.py::test_collision_auto_rename PASSED                [ 36%]
-tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 39%]
-tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 41%]
-tests/test_junk_cleaner.py::test_scan_and_clean_junk_directory PASSED    [ 43%]
-tests/test_lan_share.py::test_get_local_ip PASSED                        [ 45%]
-tests/test_lan_share.py::test_lan_share_server_lifecycle PASSED          [ 47%]
-tests/test_organizer.py::test_organize_by_extension PASSED               [ 50%]
-tests/test_organizer.py::test_organize_by_size PASSED                    [ 52%]
-tests/test_renamer.py::test_basic_template_renaming PASSED               [ 54%]
-tests/test_renamer.py::test_case_transformations PASSED                  [ 56%]
-tests/test_renamer.py::test_find_and_replace PASSED                      [ 58%]
-tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 60%]
-tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 63%]
-tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 65%]
-tests/test_secret_scanner.py::test_detect_aws_and_openai_secrets PASSED  [ 67%]
-tests/test_secret_scanner.py::test_quarantine_leaked_file PASSED         [ 69%]
-tests/test_shell_integration.py::test_is_supported_returns_bool PASSED   [ 71%]
-tests/test_shell_integration.py::test_is_installed_query PASSED          [ 73%]
-tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 76%]
-tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 78%]
-tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 80%]
-tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 82%]
-tests/test_syncer.py::test_incremental_sync PASSED                       [ 84%]
-tests/test_snapshot_sync PASSED                                          [ 86%]
-tests/test_treemap.py::test_disk_tree_analysis PASSED                    [ 89%]
-tests/test_treemap.py::test_treemap_layout_coordinates PASSED            [ 91%]
-tests/test_treemap.py::test_find_largest_files PASSED                    [ 93%]
-tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 95%]
-tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 97%]
+tests/test_archiver.py::test_cold_storage_scanning_and_archiving PASSED  [  1%]
+tests/test_cli.py::test_cli_help PASSED                                  [  3%]
+tests/test_cli.py::test_cli_dry_run PASSED                               [  5%]
+tests/test_cli.py::test_cli_history_empty PASSED                         [  7%]
+tests/test_cli.py::test_cli_detect_cloud PASSED                          [  9%]
+tests/test_cli.py::test_cli_archive_cold_empty PASSED                    [ 11%]
+tests/test_cloud_connector.py::test_cloud_detector_runs_safely PASSED    [ 12%]
+tests/test_cloud_connector.py::test_cloud_sync_manager PASSED            [ 14%]
+tests/test_config.py::test_default_categories_loaded PASSED              [ 16%]
+tests/test_config.py::test_extension_category_lookup PASSED              [ 18%]
+tests/test_config.py::test_ignore_pattern_matching PASSED                [ 20%]
+tests/test_config.py::test_size_bucket_determination PASSED              [ 22%]
+tests/test_deduplicator.py::test_deduplicator_finds_exact_duplicates PASSED [ 24%]
+tests/test_deduplicator.py::test_plan_deduplication_actions PASSED       [ 25%]
+tests/test_doctor.py::test_doctor_full_diagnosis PASSED                  [ 27%]
+tests/test_enterprise_guardrails.py::test_protected_path_detection PASSED [ 29%]
+tests/test_enterprise_guardrails.py::test_blast_radius_threshold PASSED  [ 31%]
+tests/test_enterprise_guardrails.py::test_audit_log_hash_chain PASSED    [ 33%]
+tests/test_executor.py::test_dry_run_leaves_files_untouched PASSED       [ 35%]
+tests/test_executor.py::test_live_execution_moves_files PASSED           [ 37%]
+tests/test_executor.py::test_collision_auto_rename PASSED                [ 38%]
+tests/test_hasher.py::test_partial_and_full_hash PASSED                  [ 40%]
+tests/test_hasher.py::test_identical_files_produce_identical_hashes PASSED [ 42%]
+tests/test_i18n.py::test_i18n_translation PASSED                         [ 44%]
+tests/test_junk_cleaner.py::test_scan_and_clean_junk_directory PASSED    [ 46%]
+tests/test_lan_share.py::test_get_local_ip PASSED                        [ 48%]
+tests/test_lan_share.py::test_lan_share_server_lifecycle PASSED          [ 50%]
+tests/test_organizer.py::test_organize_by_extension PASSED               [ 51%]
+tests/test_organizer.py::test_organize_by_size PASSED                    [ 53%]
+tests/test_renamer.py::test_basic_template_renaming PASSED               [ 55%]
+tests/test_renamer.py::test_case_transformations PASSED                  [ 57%]
+tests/test_renamer.py::test_find_and_replace PASSED                      [ 59%]
+tests/test_renamer.py::test_id3_v1_extraction PASSED                     [ 61%]
+tests/test_scanner.py::test_scanner_filters_ignored_files PASSED         [ 62%]
+tests/test_scanner.py::test_scanner_extracts_correct_metadata PASSED     [ 64%]
+tests/test_scheduler.py::test_windows_task_scheduler_query PASSED        [ 66%]
+tests/test_secret_scanner.py::test_detect_aws_and_openai_secrets PASSED  [ 68%]
+tests/test_secret_scanner.py::test_quarantine_leaked_file PASSED         [ 70%]
+tests/test_shell_integration.py::test_is_supported_returns_bool PASSED   [ 72%]
+tests/test_shell_integration.py::test_is_installed_query PASSED          [ 74%]
+tests/test_smart_filter.py::test_vietnamese_invoice_detection PASSED     [ 75%]
+tests/test_smart_filter.py::test_english_invoice_detection PASSED        [ 77%]
+tests/test_smart_filter.py::test_smart_financial_sort_routing PASSED     [ 79%]
+tests/test_syncer.py::test_drive_detector_runs_without_error PASSED      [ 81%]
+tests/test_syncer.py::test_incremental_sync PASSED                       [ 83%]
+tests/test_snapshot_sync PASSED                                          [ 85%]
+tests/test_tray_daemon.py::test_windows_startup_manager_query PASSED     [ 87%]
+tests/test_tray_daemon.py::test_desktop_notifier_runs PASSED             [ 88%]
+tests/test_treemap.py::test_disk_tree_analysis PASSED                    [ 90%]
+tests/test_treemap.py::test_treemap_layout_coordinates PASSED            [ 92%]
+tests/test_find_largest_files PASSED                                    [ 94%]
+tests/test_undo.py::test_undo_restores_all_files PASSED                  [ 96%]
+tests/test_visual_hasher.py::test_hamming_distance_and_similarity PASSED [ 98%]
 tests/test_visual_hasher.py::test_visual_similarity_clustering PASSED    [100%]
 
-============================= 46 passed in 1.55s ==============================
+============================= 54 passed in 2.33s ==============================
 ```
 
 ---

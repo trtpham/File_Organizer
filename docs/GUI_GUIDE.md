@@ -66,13 +66,20 @@ You can launch the GUI in two ways:
   - Scans directories for exposed AWS keys, OpenAI API tokens, GitHub Personal Access Tokens, RSA/SSH private keys, and database connection strings.
   - **Quarantine Mode:** Safely relocates leaked files into a secure `_Quarantine/` folder with permissions restricted.
 
-### 7. ⏪ Undo & History
+### 7. 🩺 Doctor & Health Diagnostics
+- **One-Click Diagnostic Battery:**
+  - Evaluates Python runtime, platform compatibility, disk headroom, and SQLite database integrity.
+  - Measures real-time disk write latency (512 KB flush benchmark).
+  - Inspects Windows Explorer right-click menu integration and connected cloud storage providers.
+- **Health Badge & Treeview:** Clear status (`HEALTHY` / `UNHEALTHY`) with `PASS`, `WARN`, `FAIL` badges and actionable guidance.
+
+### 8. ⏪ Undo & History
 - Displays all past organization and renaming sessions with date, mode, files moved, and status.
 - Select any completed session and click **⏪ Undo Selected Session** to instantly restore files to their previous paths.
 
-### 8. ⚙️ Rules, Settings & Shell Integration
-- **Windows Explorer Context Menu:**
-  - One-click registration of right-click menu items under current user (`HKCU`): "Smart Organize Here", "Find Duplicates Here", and "Open in SFO GUI". No Administrator privileges needed.
-  - One-click uninstaller.
-- **File Categories:** Inspect all 150+ file extensions mapped to categories.
-- User overrides are automatically stored in `~/.smart_file_organizer/config.json`.
+### 9. ⚙️ Enterprise Settings & Shell
+- **Bilingual Language Selector:** Switch seamlessly between **English** and **Tiếng Việt**.
+- **Windows Autostart on Boot:** Enable or disable automatic background launch on Windows login with one click.
+- **Cryptographic Audit Verification:** Validate the SHA-256 tamper-evident audit journal.
+- **Windows Explorer Context Menu:** One-click registration/removal under `HKCU` without Administrator rights.
+- **File Categories:** Inspect all 150+ file extensions mapped to categories. User overrides are saved in `~/.smart_file_organizer/config.json`.

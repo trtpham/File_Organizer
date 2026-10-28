@@ -28,6 +28,11 @@ from ..core.secret_scanner import SecretScanner
 from ..core.archiver import ColdStorageAnalyzer, ColdStorageArchiver
 from ..core.cloud_connector import CloudDetector, CloudSyncManager
 from ..core.lan_share import LANShareServer, get_local_ip
+from ..core.enterprise_guardrails import EnterpriseGuardrails, AuditLogChain
+from ..core.doctor import SFODoctor
+from ..core.i18n import I18n, _t
+from ..core.tray_daemon import WindowsStartupManager, DesktopNotifier
+from ..core.scheduler import WindowsTaskScheduler
 from ..core.models import OrganizeStrategy, ActionType, SyncProfile, SyncMode
 
 
@@ -35,6 +40,10 @@ def run_cli(args: Optional[List[str]] = None) -> int:
     """Main CLI execution router."""
     parser = create_parser()
     parsed_args = parser.parse_args(args)
+
+    # Initialize i18n localization
+    if parsed_args.lang:
+        I18n.set_language(parsed_args.lang)
 
     # 1. Check for GUI launch
     if parsed_args.gui:
@@ -270,6 +279,82 @@ def run_cli(args: Optional[List[str]] = None) -> int:
             print_info("\nLAN Drop server stopped.")
             return 0
 
+    # 2k. SFO Doctor Diagnostics
+    if parsed_args.doctor:
+        target = Path(parsed_args.source or ".").resolve()
+        print_info(f"Running SFO Doctor System Diagnostics on: {target}...")
+        report = SFODoctor.run_full_diagnosis(target_path=target)
+
+        status_color = Color.GREEN if report["overall_status"] == "HEALTHY" else Color.RED
+        print(f"\n{status_color}{Color.BOLD}>>> Overall System Status: {report['overall_status']} ({report['pass_count']} PASS, {report['warn_count']} WARN, {report['fail_count']} FAIL){Color.RESET}\n")
+
+        headers = ["Diagnostic Check", "Result", "Evaluation & Details"]
+        rows = []
+        for c in report["checks"]:
+            res_styled = f"{Color.GREEN}PASS{Color.RESET}" if c["status"] == "PASS" else (f"{Color.YELLOW}WARN{Color.RESET}" if c["status"] == "WARN" else f"{Color.RED}FAIL{Color.RESET}")
+            rows.append([c["name"], res_styled, c["message"]])
+        print_table(headers, rows)
+        return 0 if report["overall_status"] == "HEALTHY" else 1
+
+    # 2l. Windows Startup Autostart
+    if parsed_args.enable_autostart:
+        res = WindowsStartupManager.enable_autostart()
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    if parsed_args.disable_autostart:
+        res = WindowsStartupManager.disable_autostart()
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    # 2m. Audit Log Verification
+    if parsed_args.verify_audit:
+        chain = AuditLogChain()
+        print_info("Verifying mathematical integrity of cryptographic SHA-256 audit log...")
+        is_valid, count, msg = chain.verify_integrity()
+        if is_valid:
+            print_success(msg)
+            return 0
+        else:
+            print_error(f"INTEGRITY ALERT: {msg}")
+            return 1
+
+    # 2n. Windows Task Scheduler
+    if parsed_args.schedule_daily:
+        target = Path(parsed_args.source or ".").resolve()
+        time_val = parsed_args.schedule_daily
+        args_str = f'--source "{target}" -r'
+        res = WindowsTaskScheduler.create_daily_task("DailySweep", args_str, start_time=time_val)
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
+    if parsed_args.list_tasks:
+        tasks = WindowsTaskScheduler.list_sfo_tasks()
+        if not tasks:
+            print_info("No registered SFO scheduled tasks found.")
+        else:
+            print_success(f"Found {len(tasks)} active SFO scheduled task(s):")
+            for t in tasks:
+                print(f"  - {t['name']:<20} Next Run: {t['next_run']:<20} Status: {t['status']}")
+        return 0
+
+    if parsed_args.delete_task:
+        res = WindowsTaskScheduler.delete_task(parsed_args.delete_task)
+        if res["success"]:
+            print_success(res["message"])
+        else:
+            print_error(res["message"])
+        return 0 if res["success"] else 1
+
     # 3. Check for Undo command
     if parsed_args.undo:
         target_id = None if parsed_args.undo == "latest" else parsed_args.undo
@@ -292,6 +377,12 @@ def run_cli(args: Optional[List[str]] = None) -> int:
     source_dir = Path(source_str).resolve()
     if not source_dir.exists() or not source_dir.is_dir():
         print_error(f"Source directory does not exist or is invalid: {source_dir}")
+        return 1
+
+    # Enterprise Safety Guardrail: Protect critical operating system directories
+    is_prot, prot_reason = EnterpriseGuardrails.is_protected_path(source_dir)
+    if is_prot:
+        print_error(f"Enterprise Guardrail Violation: {prot_reason}")
         return 1
 
     dest_str = parsed_args.dest or source_str
@@ -459,6 +550,19 @@ def run_cli(args: Optional[List[str]] = None) -> int:
 
     # Save session journal
     undo_mgr.save_session(session)
+
+    # Append to tamper-evident cryptographic audit chain
+    AuditLogChain().log_event(
+        action="SESSION_EXECUTE",
+        details={
+            "session_id": session.session_id,
+            "strategy": session.strategy,
+            "dry_run": session.dry_run,
+            "moved_count": session.moved_count,
+            "source_dir": str(source_dir),
+            "dest_dir": str(dest_dir)
+        }
+    )
 
     # Print summary
     print(Reporter.generate_console_summary(session))

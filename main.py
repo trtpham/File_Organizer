@@ -6,6 +6,14 @@ Main unified entrypoint for CLI and Desktop GUI.
 
 import sys
 
+# Ensure UTF-8 console output on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def main() -> None:
     # If no CLI arguments provided, launch Desktop GUI
