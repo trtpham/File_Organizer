@@ -79,9 +79,9 @@ smart_file_organizer/      # Python — untouched until Phase 7
 | P1 | Foundation: models, config, i18n, scanner, hasher, guardrails, organizer, executor, undo | Rust reads a Python-written `history.db` + journal and rolls it back (compat test) — **DONE locally 2026-11-08**; `smart_filter` is a stub until P2 |
 | P2 | dedup, visual_hasher, renamer, smart_filter, reporter | Ported tests for these modules pass — **DONE locally 2026-11-08** |
 | P3 | junk, secrets, treemap, archiver, syncer, watcher, cloud, lan_share, shredder, vault | Vault: Rust opens Python v1 vault; new v2 AEAD round-trips — **DONE locally 2026-11-08** |
-| P4 | Windows platform: shell menu, scheduler, tray/startup, doctor | Manual check on Windows 11 recorded in evidence |
-| P5 | `sfo` CLI parity — every subcommand/flag in `docs/CLI_USAGE.md` | Ported `test_cli.py` cases pass against Rust binary |
-| P6 | egui GUI — 9 tabs parity per `docs/GUI_GUIDE.md` | Manual walkthrough + screenshots |
+| P4 | Windows platform: shell menu, scheduler, tray/startup, doctor | Manual check on Windows 11 recorded in evidence — **DONE locally 2026-11-08** |
+| P5 | `sfo` CLI parity — every subcommand/flag in `docs/CLI_USAGE.md` | Ported `test_cli.py` cases pass against Rust binary — **DONE locally 2026-11-08** |
+| P6 | egui GUI — 9 tabs parity per `docs/GUI_GUIDE.md` | Manual walkthrough + screenshots — **Built 2026-11-08**; layout checked by self-captured screenshots; interactive click-through NOT_RUN |
 | P7 | Release: replace PyInstaller with `cargo build --release` artifacts in `release.yml`; delete Python package, `setup.py`, `pyproject.toml`, `sfo.spec`, `tests/`; update README + docs | PO sign-off on parity checklist |
 
 ## 6. Intentional behaviour changes vs Python v3.0
@@ -101,6 +101,13 @@ Recorded so P5/P6 parity reviews don't flag them as regressions.
 | LAN Drop | No upload cap; overwrote same-name uploads; PIN compare not constant-time; bad Range → 500 | 512 MiB cap (413); unique names; constant-time; 416 | Hardening |
 | Google Drive detect | Any existing `F:`–`J:` drive root counted | Only drives with `My Drive` | USB sticks misdetected |
 | Watcher | Polling | Polling (same algorithm); `notify` not needed | Parity |
+| Data directory | Always `~/.smart_file_organizer` | `SFO_DATA_DIR` overrides it (portable installs, isolated tests) | Testability |
+| CLI | argparse | clap with the same flags/defaults/choices; adds `--vault-upgrade`, `slugify` for `--rename-case`; usage errors still exit 2; `sfo` with no args opens the GUI | D4 / parity |
+| Explorer menu, autostart, schtasks | Point at `python main.py` | Point at the `sfo` executable next to the running binary | Native build |
+| Toast notifications | Title/message spliced into a PowerShell script | Passed as environment variables | Script injection |
+| Doctor | "Python Runtime", Pillow/PyMuPDF accelerators | "SFO Runtime", "Built-in Modules" | Native build |
+| GUI | Tkinter; long work on the UI thread (window freezes) | egui; long work on a worker thread with a spinner, one job at a time | Responsiveness |
+| GUI text | Hard-coded English | Tab names and main buttons go through `i18n`, so the language setting applies immediately | Translations existed but were unused |
 
 ## 7. Risks
 

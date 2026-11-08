@@ -7,6 +7,7 @@ pub mod archiver;
 pub mod cloud;
 pub mod config;
 pub mod dedup;
+pub mod doctor;
 pub mod error;
 pub mod executor;
 pub mod fnmatch;
@@ -19,6 +20,7 @@ pub mod lan_share;
 pub mod models;
 pub mod organizer;
 pub mod paths;
+pub mod platform;
 pub mod pyjson;
 pub mod renamer;
 pub mod reporter;
@@ -42,9 +44,16 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Python v3.0 build so existing history and journals stay readable.
 pub const APP_DIR_NAME: &str = ".smart_file_organizer";
 
-/// `~/.smart_file_organizer`, falling back to the current directory when the
-/// home directory cannot be determined.
+/// Environment variable that relocates the data directory (portable installs
+/// and isolated tests). Not present in the Python build.
+pub const DATA_DIR_ENV: &str = "SFO_DATA_DIR";
+
+/// `$SFO_DATA_DIR` if set, else `~/.smart_file_organizer`, falling back to the
+/// current directory when the home directory cannot be determined.
 pub fn default_data_dir() -> std::path::PathBuf {
+    if let Some(dir) = std::env::var_os(DATA_DIR_ENV).filter(|v| !v.is_empty()) {
+        return std::path::PathBuf::from(dir);
+    }
     dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(APP_DIR_NAME)
