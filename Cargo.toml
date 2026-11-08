@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/sfo-core", "crates/sfo-cli", "crates/sfo-gui", "crates/sfo-compat-tests"]
 
 [workspace.package]
-version = "4.0.0-alpha.0"
+version = "4.0.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"

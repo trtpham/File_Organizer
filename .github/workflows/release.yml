@@ -5,39 +5,75 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build-windows:
-    name: Build Standalone Windows Executable
-    runs-on: windows-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          targets: ${{ matrix.target }}
 
-      - name: Install Dependencies & PyInstaller
+      - name: Install GUI system libraries (Linux)
+        if: runner.os == 'Linux'
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller pillow pymupdf
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
       - name: Run Quality Gate & Test Suite
-        run: |
-          pip install pytest
-          python -m pytest -v tests/
+        run: cargo test --workspace --locked
 
-      - name: Compile Standalone Executable & Package ZIP
+      - name: Build release binaries
+        run: cargo build --release --locked --target ${{ matrix.target }} -p sfo-cli -p sfo-gui
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          python scripts/build_exe.py
+          $name = "SmartFileOrganizer_${{ github.ref_name }}_${{ matrix.target }}"
+          New-Item -ItemType Directory -Force $name | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/sfo.exe, target/${{ matrix.target }}/release/sfo-gui.exe, README.md, LICENSE $name
+          Compress-Archive -Path $name -DestinationPath "$name.zip"
+          "ASSET=$name.zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Package (Linux / macOS)
+        if: runner.os != 'Windows'
+        run: |
+          name="SmartFileOrganizer_${{ github.ref_name }}_${{ matrix.target }}"
+          mkdir -p "$name"
+          cp target/${{ matrix.target }}/release/sfo target/${{ matrix.target }}/release/sfo-gui README.md LICENSE "$name"/
+          tar -czf "$name.tar.gz" "$name"
+          echo "ASSET=$name.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: dist/SmartFileOrganizer_v3.0_Windows_x64.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: ${{ env.ASSET }}

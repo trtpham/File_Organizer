@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// `config/default_config.json`, compiled into the binary.
-pub const DEFAULT_CONFIG_JSON: &str = include_str!("../../../config/default_config.json");
+pub const DEFAULT_CONFIG_JSON: &str = include_str!("../data/default_config.json");
 
 /// Loaded configuration plus precomputed lookups.
 #[derive(Debug, Clone)]

@@ -2,8 +2,10 @@
 
 ## Syntax Overview
 ```bash
-python main.py [OPTIONS]
+sfo [OPTIONS]
 ```
+
+On Windows the program is `sfo.exe`. All examples work the same on Linux and macOS with POSIX paths.
 
 ## Available Command-Line Arguments
 
@@ -24,7 +26,7 @@ python main.py [OPTIONS]
 | | `--rename-template TPL`| Batch renaming template with metadata tokens | `None` |
 | | `--rename-find STR` | Substring or pattern to find for renaming | `""` |
 | | `--rename-replace STR` | Replacement string for renaming | `""` |
-| | `--rename-case CASE` | Casing transform: `lowercase`, `uppercase`, `title_case`, `snake_case`, `kebab_case` | `None` |
+| | `--rename-case CASE` | Casing transform: `lowercase`, `uppercase`, `title_case`, `snake_case`, `kebab_case`, `slugify` | `None` |
 | | `--detect-usb` | Detect and list currently attached removable USB drives | `False` |
 | | `--sync-source PATH` | Source directory for backup synchronization | `None` |
 | | `--sync-dest PATH` | Destination directory or USB path for backup | `None` |
@@ -36,6 +38,14 @@ python main.py [OPTIONS]
 | | `--quarantine-secrets` | Move compromised credential files to `_Quarantine/` | `False` |
 | | `--install-context-menu` | Register right-click context menu in Windows Explorer | `False` |
 | | `--uninstall-context-menu` | Remove right-click context menu from Windows Explorer | `False` |
+| | `--shred PATH` | Overwrite and delete a file or a whole folder (irreversible) | `None` |
+| | `--shred-method M` | `dod_3pass`, `quick_1pass`, `nist_800_88`, `gutmann_7pass` | `dod_3pass` |
+| | `--vault-lock PATH` | Pack and encrypt a file or folder into a `.sfovault` (`--dest` sets the output) | `None` |
+| | `--vault-unlock FILE` | Decrypt a vault into `--dest` (default: current folder) | `None` |
+| | `--vault-inspect FILE` | List a vault's contents without extracting | `None` |
+| | `--vault-upgrade FILE` | Re-encrypt a v3.0 (v1) vault with the v4 format | `None` |
+| | `--vault-pass PASS` | Vault passphrase (prompted, hidden, when omitted) | prompt |
+| | `--vault-shred-source` | Shred the source after locking it into the vault | `False` |
 | | `--archive-cold` | Compress cold/inactive files into a ZIP archive | `False` |
 | | `--archive-days DAYS` | Inactivity age threshold in days for cold storage | `90` |
 | | `--archive-dest PATH` | Custom destination path for archive ZIP | `None` |
@@ -59,7 +69,19 @@ python main.py [OPTIONS]
 | `-w` | `--watch` | Run background watcher daemon with debounce | `False` |
 | | `--report FILE` | Generate standalone HTML dashboard report | `None` |
 | `-c` | `--config FILE` | Path to custom `config.json` | Default config |
-| `-g` | `--gui` | Launch Desktop Graphical User Interface | `False` |
+| `-g` | `--gui` | Launch the desktop app (`sfo-gui`, must sit next to `sfo`) | `False` |
+| `-h` | `--help` | Show all options | |
+| `-V` | `--version` | Show the version | |
+
+Running `sfo` with no arguments opens the desktop app. Invalid options exit
+with code 2; failed operations exit with code 1.
+
+### Environment variables
+
+| Variable | Effect |
+| :--- | :--- |
+| `SFO_DATA_DIR` | Folder for history, journals, audit log and user config (default `~/.smart_file_organizer`) |
+| `NO_COLOR` | Disable coloured output (also automatic when output is piped) |
 
 ---
 
@@ -68,135 +90,151 @@ python main.py [OPTIONS]
 ### 1. Smart Bulk Renaming with Metadata & Counter
 ```bash
 # Rename photos with camera model, date taken, and counter:
-python main.py --source "D:/Photos" --rename-template "{date}_{camera}_{counter:03d}"
+sfo --source "D:/Photos" --rename-template "{date}_{camera}_{counter:03d}"
 
 # Snake-case filenames with find and replace:
-python main.py --source "D:/Project" --rename-template "{name}" --rename-case snake_case --rename-find "draft" --rename-replace "release"
+sfo --source "D:/Project" --rename-template "{name}" --rename-case snake_case --rename-find "draft" --rename-replace "release"
 ```
 
 ### 2. Perceptual Visual Duplicate Detection (pHash)
 ```bash
 # Find visually similar or resized images:
-python main.py --source "D:/Photos" --visual-dedupe --similarity 0.90 --dedupe-action move_to_duplicates
+sfo --source "D:/Photos" --visual-dedupe --similarity 0.90 --dedupe-action move_to_duplicates
 ```
 
 ### 3. Smart Receipt & Invoice Organization
 ```bash
 # Automatically route electricity, water, and online invoices into Finance_2026/
-python main.py --source "C:/Users/Raven/Downloads" --smart-receipts
+sfo --source "C:/Users/Raven/Downloads" --smart-receipts
 ```
 
 ### 4. USB Drive Detection & Incremental Backup
 ```bash
 # Check connected USB drives:
-python main.py --detect-usb
+sfo --detect-usb
 
 # Incrementally sync documents or game saves:
-python main.py --sync-source "C:/Users/Raven/Documents" --sync-dest "E:/USB_Backup" --sync-mode incremental
+sfo --sync-source "C:/Users/Raven/Documents" --sync-dest "E:/USB_Backup" --sync-mode incremental
 
 # Create timestamped zip snapshot:
-python main.py --sync-source "D:/SaveGames" --sync-dest "E:/Backups" --sync-mode snapshot
+sfo --sync-source "D:/SaveGames" --sync-dest "E:/Backups" --sync-mode snapshot
 ```
 
 ### 5. Safe Dry-Run Preview
 ```bash
-python main.py --source "C:/Users/Raven/Downloads" --dry-run
+sfo --source "C:/Users/Raven/Downloads" --dry-run
 ```
 
 ### 6. Storage Analysis & Largest Files
 ```bash
 # Analyze disk usage distribution and find top storage-eating files:
-python main.py --source "C:/Users/Raven" --analyze-disk
+sfo --source "C:/Users/Raven" --analyze-disk
 ```
 
 ### 7. Developer Junk Cleaner
 ```bash
 # Scan for inactive node_modules, .venv, and build caches:
-python main.py --source "D:/Workspaces" --scan-junk
+sfo --source "D:/Workspaces" --scan-junk
 
 # Permanently delete discovered junk directories:
-python main.py --source "D:/Workspaces" --clean-junk
+sfo --source "D:/Workspaces" --clean-junk
 ```
 
 ### 8. Secret Scanner (DLP) & File Quarantine
 ```bash
 # Scan directory for exposed API keys, private keys, and connection strings:
-python main.py --source "D:/Projects" --scan-secrets
+sfo --source "D:/Projects" --scan-secrets
 
 # Quarantine compromised files into _Quarantine/ folder:
-python main.py --source "D:/Projects" --quarantine-secrets
+sfo --source "D:/Projects" --quarantine-secrets
 ```
 
 ### 9. Windows Explorer Shell Integration
 ```bash
 # Register right-click context menu under HKCU (no Admin required):
-python main.py --install-context-menu
+sfo --install-context-menu
 
 # Unregister right-click context menu:
-python main.py --uninstall-context-menu
+sfo --uninstall-context-menu
 ```
 
 ### 10. Cold Storage Archiving & Tiered Compression
 ```bash
 # Automatically compress files inactive for >= 90 days into an archive:
-python main.py --source "D:/Archives" --archive-cold --archive-days 90
+sfo --source "D:/Archives" --archive-cold --archive-days 90
 
 # Compress cold files and delete originals to reclaim disk space:
-python main.py --source "D:/Archives" --archive-cold --archive-days 180 --archive-delete-sources
+sfo --source "D:/Archives" --archive-cold --archive-days 180 --archive-delete-sources
 
 # Restore/extract a previously created SFO archive:
-python main.py --restore-archive "D:/Archives/Archive_20261027.zip" --dest "D:/Restored"
+sfo --restore-archive "D:/Archives/Archive_20261027.zip" --dest "D:/Restored"
 ```
 
 ### 11. Cloud Storage Sync (OneDrive, Google Drive, Dropbox)
 ```bash
 # Detect and list active cloud storage directories:
-python main.py --detect-cloud
+sfo --detect-cloud
 
 # Sync important documents or finance files directly to OneDrive:
-python main.py --source "C:/Users/Raven/Documents" --sync-cloud onedrive
+sfo --source "C:/Users/Raven/Documents" --sync-cloud onedrive
 ```
 
 ### 12. Wireless Cross-Device LAN Drop
 ```bash
 # Start local Wi-Fi file exchange server on default port 8080:
-python main.py --source "C:/Users/Raven/Downloads" --lan-share
+sfo --source "C:/Users/Raven/Downloads" --lan-share
 
 # Start LAN server with custom port and 4-digit PIN:
-python main.py --source "D:/Share" --lan-share --lan-port 9000 --lan-pin 4821
+sfo --source "D:/Share" --lan-share --lan-port 9000 --lan-pin 4821
 ```
 
 ### 13. SFO Doctor System Diagnostics
 ```bash
 # Run comprehensive workstation disk latency, permission, and health checks:
-python main.py --doctor
+sfo --doctor
 ```
 
 ### 14. Cryptographic Audit Chain Verification
 ```bash
 # Mathematically verify that the tamper-evident SHA-256 audit log has not been altered:
-python main.py --verify-audit
+sfo --verify-audit
 ```
 
 ### 15. Native Windows Task Scheduler Automation
 ```bash
 # Schedule daily automated organization at 18:00 (runs silently even when GUI is closed):
-python main.py --source "C:/Users/Raven/Downloads" --schedule-daily 18:00
+sfo --source "C:/Users/Raven/Downloads" --schedule-daily 18:00
 
 # View all registered SFO automated tasks:
-python main.py --list-tasks
+sfo --list-tasks
 
 # Delete scheduled task:
-python main.py --delete-task DailySweep
+sfo --delete-task DailySweep
 ```
 
 ### 16. Multi-Language CLI Output (Vietnamese)
 ```bash
 # Run commands with Vietnamese localization:
-python main.py --source "C:/Users/Raven/Downloads" --dry-run --lang vi
+sfo --source "C:/Users/Raven/Downloads" --dry-run --lang vi
 ```
 
 ### 17. Undo Previous Operation (100% Rollback)
 ```bash
-python main.py --undo
+sfo --undo
+```
+
+### 18. Encrypted Vault and Secure Shredding
+```bash
+# Lock a folder (passphrase prompted), then shred the originals:
+sfo --vault-lock "D:/Tax/2026" --dest "D:/Tax_2026.sfovault" --vault-shred-source
+
+# Look inside, then unlock elsewhere:
+sfo --vault-inspect "D:/Tax_2026.sfovault"
+sfo --vault-unlock "D:/Tax_2026.sfovault" --dest "D:/Restored"
+
+# Upgrade a vault created by v3.0:
+sfo --vault-upgrade "D:/Old.sfovault"
+
+# Irreversibly wipe a file:
+sfo --shred "D:/old_contract.pdf" --shred-method dod_3pass
 ```

@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "sfo-cli"
-version = "4.0.0-alpha.0"
+version = "4.0.0"
 dependencies = [
  "anstream 0.6.21",
  "chrono",
@@ -3623,7 +3623,7 @@ dependencies = [
 
 [[package]]
 name = "sfo-compat-tests"
-version = "4.0.0-alpha.0"
+version = "4.0.0"
 dependencies = [
  "hex",
  "rusqlite",
@@ -3634,7 +3634,7 @@ dependencies = [
 
 [[package]]
 name = "sfo-core"
-version = "4.0.0-alpha.0"
+version = "4.0.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -3669,7 +3669,7 @@ dependencies = [
 
 [[package]]
 name = "sfo-gui"
-version = "4.0.0-alpha.0"
+version = "4.0.0"
 dependencies = [
  "chrono",
  "dirs",

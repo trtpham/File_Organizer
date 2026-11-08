@@ -1,78 +1,102 @@
-# System Architecture & Technical Design
+# System Architecture & Technical Design (v4.0)
 
-## 1. Architectural Principles
-- **Decoupled Layered Architecture:** Clear boundary between Presentation (CLI / GUI) and Domain Core.
-- **Zero-Dependency Mandate:** The entire application core runs on Python Standard Library (`pathlib`, `shutil`, `hashlib`, `sqlite3`, `json`, `tkinter`, `argparse`, `threading`).
-- **Transactional Integrity:** File system mutations are recorded in an append-only journal in SQLite and JSON.
+## 1. Principles
+- **Layered workspace:** all file-handling logic lives in one library crate
+  (`sfo-core`); the command line (`sfo-cli`) and the desktop app (`sfo-gui`)
+  are thin front ends over it.
+- **Native, self-contained:** two executables, no interpreter or runtime.
+  Image decoding, EXIF, PDF text, SQLite and cryptography are compiled in.
+- **Transactional integrity:** every file operation is recorded in SQLite and
+  a JSON journal before the session ends, so it can be rolled back.
+- **Compatible with v3.0 data:** history, journals, audit log, config, cold
+  archives and vaults written by the Python v3.0 build are read unchanged
+  (golden files in `crates/sfo-compat-tests`).
+- **No `unsafe` code** in the workspace (`unsafe_code = "deny"`); Windows APIs
+  are reached through `winreg`, `sysinfo` and `schtasks.exe`.
 
 ```
-+----------------------------------------------------------------------------------+
-|                 SMART FILE ORGANIZER v3.0 - COMMERCIAL EDITION                   |
-+----------------------------------------------------------------------------------+
-|                                  INTERFACES                                      |
-|  smart_file_organizer/gui/                        smart_file_organizer/cli/      |
-|  - app.py (9-Tab Localized Tkinter Dark UI)       - parser.py (argparse CLI)     |
-|  - components.py (StatCard, Treeview)             - formatter.py (ANSI tables)   |
-|  - theme.py (Modern Slate Theme)                  - app.py (CLI Router)          |
-+----------------------------------------------------------------------------------+
-                                        |
-                                        v
-+----------------------------------------------------------------------------------+
-|                         ENTERPRISE & PLATFORM SERVICES                           |
-|  ├── enterprise_guardrails.py -> Path blacklist, blast radius & SHA-256 audit log|
-|  ├── doctor.py                -> System health & disk I/O latency diagnostics    |
-|  ├── i18n.py                  -> Multilingual localization (English & Tiếng Việt)|
-|  ├── tray_daemon.py           -> Windows Startup (HKCU Run) & Toast Notifications|
-|  └── scheduler.py             -> Windows Task Scheduler (schtasks) integration   |
-+----------------------------------------------------------------------------------+
-                                        |
-                                        v
-+----------------------------------------------------------------------------------+
-|                                CORE ENGINE                                       |
-|  smart_file_organizer/core/                                                      |
-|  ├── scanner.py          -> Fast traversal with pattern exclusion (.git, etc.)   |
-|  ├── hasher.py           -> 3-tiered chunked hasher (Size -> 64KB -> SHA-256)    |
-|  ├── visual_hasher.py    -> Perceptual difference hasher (dHash) & similarity   |
-|  ├── deduplicator.py     -> Duplicate grouping (Exact & Visual) & resolution    |
-|  ├── renamer.py          -> Smart Bulk Renamer (EXIF, ID3, Templates, Casing)   |
-|  ├── syncer.py           -> USB detector, incremental sync & snapshot archiver  |
-|  ├── archiver.py         -> Cold storage analyzer, compression & restore engine  |
-|  ├── cloud_connector.py  -> Auto-detect OneDrive, GDrive, Dropbox & cloud sync  |
-|  ├── lan_share.py        -> Embedded HTTP LAN Drop server for wireless transfers |
-|  ├── treemap.py          -> Disk usage tree analyzer & 2D treemap layout engine |
-|  ├── junk_cleaner.py     -> Inactive dev bloat cleaner (node_modules, caches)   |
-|  ├── secret_scanner.py   -> DLP secret detector (AWS, OpenAI, GitHub, SSH)      |
-|  ├── shell_integration.py-> Windows Explorer HKCU right-click context menu      |
-|  ├── smart_filter.py     -> PDF text extractor & financial invoice classifier   |
-|  ├── organizer.py        -> Multi-strategy engine (Ext, Date, Size, Receipts)   |
-|  ├── executor.py         -> Safe execution, dry-run simulation & collisions     |
-|  ├── undo_manager.py     -> SQLite & JSON journaling, 100% rollback engine       |
-|  ├── watcher.py          -> Debounced directory daemon & USB auto-sync          |
-|  ├── reporter.py         -> HTML Dashboard, Markdown & Console summaries         |
-|  ├── config.py           -> Configuration loader with fallback defaults          |
-|  └── models.py           -> Dataclasses: FileInfo, ActionRecord, SessionLog      |
-+----------------------------------------------------------------------------------+
++-------------------------------------------------------------------------+
+|                               FRONT ENDS                                |
+|  crates/sfo-gui  (eframe / egui)          crates/sfo-cli  (clap)        |
+|  - app.rs     window, tabs, worker jobs   - args.rs  flags (v3-compatible)
+|  - tabs_*.rs  9 tabs, 8 sub-tabs          - run.rs   command router    |
+|  - widgets.rs card, stat card, picker,    - out.rs   colours, tables   |
+|               table, buttons                                            |
+|  - dialog.rs  modal info/confirm                                        |
+|  - theme.rs   slate dark palette                                        |
++-------------------------------------------------------------------------+
+                                    |
+                                    v
++-------------------------------------------------------------------------+
+|                    PLATFORM & ENTERPRISE (sfo-core)                     |
+|  platform::shell      Explorer context menu (HKCU)                      |
+|  platform::startup    start on login (HKCU Run)                         |
+|  platform::scheduler  Task Scheduler (schtasks)                         |
+|  platform::notify     toast notifications (PowerShell/WinRT)            |
+|  guardrails           protected paths, blast radius, SHA-256 audit chain|
+|  doctor               health checks                                     |
+|  i18n                 English / Tiếng Việt                              |
++-------------------------------------------------------------------------+
+                                    |
+                                    v
++-------------------------------------------------------------------------+
+|                         CORE ENGINE (sfo-core)                          |
+|  scanner       directory walk with ignore rules (fnmatch)               |
+|  hasher        size -> 128 KB partial -> full SHA-256 (rayon, cached)   |
+|  visual_hasher dHash / aHash, Pillow-compatible resize                  |
+|  dedup         exact & visual groups, keep policies, plans              |
+|  organizer     extension / date / size / regex / receipts               |
+|  smart_filter  invoice classifier (lopdf text, keywords, vendors)       |
+|  renamer       templates, EXIF, ID3, casing, regex                      |
+|  executor      dry run, collisions, moves, deletes                      |
+|  undo          SQLite + JSON journals, LIFO rollback                    |
+|  reporter      console, Markdown, HTML reports                          |
+|  syncer, cloud, archiver, watcher, lan_share, treemap, junk, secrets,   |
+|  shredder, vault                                                        |
+|  config, models, paths, pyjson, fsutil, fnmatch                         |
++-------------------------------------------------------------------------+
 ```
 
-## 2. Tiered Deduplication Algorithm
-Traditional deduplication computes SHA-256 over all candidate files, incurring intense disk I/O.
-Smart File Organizer uses a 3-tier filtration pipeline:
+## 2. Tiered Deduplication
+1. **Size grouping:** files are grouped by byte size; unique sizes are dropped
+   without reading the disk. Empty files are ignored.
+2. **Partial hash:** the first 128 KB of each candidate is hashed with
+   SHA-256 in parallel; differing prefixes are dropped.
+3. **Full SHA-256:** only the survivors are streamed in 2 MB buffers.
+Hashes are cached per `(path, mtime, size, algorithm)` for the life of the
+process.
 
-1. **Tier 1 (Size Grouping):**
-   - Files are grouped by exact byte size `st_size`.
-   - Singletons (unique sizes) are discarded from duplicate evaluation immediately with $0$ disk read operations.
-2. **Tier 2 (Fast Partial Chunk Hashing):**
-   - Candidate pairs read only the first $64\text{ KB}$ (`DEFAULT_PARTIAL_BYTES`).
-   - If initial bytes differ, files are discarded.
-3. **Tier 3 (Full Cryptographic SHA-256 Verification):**
-   - Only surviving candidates are streamed in $1\text{ MB}$ buffers to compute the full SHA-256 digest.
+## 3. Transaction Journaling & Rollback
+Every session gets an ID `sfo_YYYYMMDD_HHMMSS_<hex>` and is written to:
+- SQLite: `<data dir>/history.db` (WAL mode)
+- JSON: `<data dir>/journals/<session_id>.json`
 
-## 3. Transaction Journaling & Rollback Safety
-Every session generates a unique ID `sfo_YYYYMMDD_HHMMSS_<hex>` and records each file operation into:
-- An SQLite database: `~/.smart_file_organizer/history.db`
-- A JSON journal: `~/.smart_file_organizer/journals/<session_id>.json`
+The data directory is `~/.smart_file_organizer` unless `SFO_DATA_DIR` is set.
 
 During rollback:
-- Operations are reversed in LIFO (reverse) order.
-- Destination files are moved back to their original recorded source paths.
-- Directories that became empty as a result of the rollback are automatically pruned.
+- Successful MOVE, RENAME and DEDUPLICATE records are reversed in LIFO order.
+- Files are moved back to their recorded source paths.
+- Folders emptied by the rollback are removed, but never the session's own
+  source or destination folder, nor anything above them.
+- The session is marked `ROLLED_BACK`; dry runs cannot be rolled back.
+
+## 4. Audit Chain
+`audit_chain.jsonl` holds one JSON object per event. Each entry's hash is
+`SHA-256(prev | timestamp | operator | action | json(details, sorted keys))`.
+The JSON serialisation reproduces Python's `json.dumps` byte for byte so that
+chains started by v3.0 keep verifying.
+
+## 5. Vault Format
+- **v2 (written by v4):** `SFOVAULT | u16 2 | kdf id | Argon2id m/t/p | salt[16]
+  | nonce[24] | ciphertext+tag`, XChaCha20-Poly1305 with the whole header as
+  associated data.
+- **v1 (v3.0, read-only):** PBKDF2-HMAC-SHA256 ×100 000, then either
+  AES-256-GCM or a SHA-256 keystream + HMAC; both are accepted.
+  `sfo --vault-upgrade` rewrites a v1 file as v2.
+
+## 6. Desktop App Threading
+The egui window renders every frame on the UI thread. Scans, hashing, file
+moves, encryption, sync and diagnostics run on a worker thread; results come
+back through a channel. One job runs at a time, and its buttons are disabled
+until it finishes. The LAN Drop server runs its own 8 worker threads and stops
+when the window closes.

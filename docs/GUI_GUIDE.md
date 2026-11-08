@@ -1,15 +1,15 @@
 # Smart File Organizer Desktop GUI User Manual
 
 ## Launching the Desktop Application
-You can launch the GUI in two ways:
-1. Double-click `main.py` (or run without arguments):
-   ```bash
-   python main.py
-   ```
-2. Or explicitly pass the `--gui` flag:
-   ```bash
-   python main.py --gui
-   ```
+Run `sfo-gui` (`sfo-gui.exe` on Windows). Running `sfo` with no arguments, or
+`sfo --gui`, also opens it, provided `sfo-gui` sits in the same folder. The
+Explorer right-click entry "Open in SFO GUI" passes the clicked folder with
+`--source`, which pre-fills every folder field.
+
+The app is built with egui (v3.0 used Tkinter). Long operations — scans,
+hashing, moves, encryption — run in the background: the status bar shows a
+spinner and the action buttons are disabled until the job finishes. Every
+confirmation and result appears in a dialog inside the window.
 
 ---
 
@@ -27,13 +27,13 @@ You can launch the GUI in two ways:
   - `Exact Hash (SHA-256)`: Finds 100% bit-for-bit identical files across any format.
   - `Visual pHash (dHash)`: Finds visually similar, resized, or re-compressed photos.
 - **Similarity Threshold:** Choose similarity percentage (80%, 85%, 90%, 95%, 100%).
-- **Keep Original Selector:** Choose between `oldest`, `newest`, `shortest_path`, or best resolution.
+- **Keep Original Selector:** Choose between `oldest`, `newest` and `shortest_path` (visual mode always keeps the highest resolution).
 - **Move Duplicates:** Safely isolates redundant files into `_Duplicates/` folder.
 
 ### 3. 🏷️ Smart Bulk Renamer
 - **Metadata Tokens:** `{name}`, `{counter:03d}`, `{date}`, `{time}`, `{camera}`, `{artist}`, `{title}`, `{album}`, `{size}`.
 - **Find & Replace:** Replace text across hundreds of files in seconds.
-- **Casing Transformations:** Convert to `lowercase`, `uppercase`, `title_case`, `snake_case`, or `kebab_case`.
+- **Casing Transformations:** Convert to `lowercase`, `uppercase`, `title_case`, `snake_case`, `kebab_case` or `slugify` (also strips accents).
 - **Interactive Diff Table:** View Original Filename $\rightarrow$ New Filename before executing.
 - **Undoable:** Batch renames are saved as transactions and can be rolled back anytime.
 
@@ -64,22 +64,24 @@ You can launch the GUI in two ways:
   - One-click safe cleanup reclaiming gigabytes of disk space.
 - **Secret Scanner (Data Loss Prevention - DLP):**
   - Scans directories for exposed AWS keys, OpenAI API tokens, GitHub Personal Access Tokens, RSA/SSH private keys, and database connection strings.
-  - **Quarantine Mode:** Safely relocates leaked files into a secure `_Quarantine/` folder with permissions restricted.
+  - **Quarantine Mode:** Moves affected files into a `_Quarantine/` folder as `<name>.quarantined`.
+- **Secure File Shredder:** Choose a file or folder and a wiping standard (1, 2, 3 or 7 passes). Protected system folders are refused. Shredding cannot be undone.
+- **Encrypted Vault:** Lock a file or folder into a `.sfovault` (Argon2id + XChaCha20-Poly1305), optionally shredding the original; inspect or unlock a vault with its passphrase. Vaults from v3.0 open too.
 
 ### 7. 🩺 Doctor & Health Diagnostics
 - **One-Click Diagnostic Battery:**
-  - Evaluates Python runtime, platform compatibility, disk headroom, and SQLite database integrity.
+  - Evaluates the SFO build, platform, available memory, disk headroom, SQLite database and audit-log integrity.
   - Measures real-time disk write latency (512 KB flush benchmark).
   - Inspects Windows Explorer right-click menu integration and connected cloud storage providers.
-- **Health Badge & Treeview:** Clear status (`HEALTHY` / `UNHEALTHY`) with `PASS`, `WARN`, `FAIL` badges and actionable guidance.
+- **Health Status & Table:** Clear status (`HEALTHY` / `UNHEALTHY`) with `PASS`, `WARN`, `FAIL` badges and actionable guidance.
 
 ### 8. ⏪ Undo & History
 - Displays all past organization and renaming sessions with date, mode, files moved, and status.
 - Select any completed session and click **⏪ Undo Selected Session** to instantly restore files to their previous paths.
 
 ### 9. ⚙️ Enterprise Settings & Shell
-- **Bilingual Language Selector:** Switch seamlessly between **English** and **Tiếng Việt**.
+- **Bilingual Language Selector:** Switch between **English** and **Tiếng Việt**; tab names and main buttons change immediately.
 - **Windows Autostart on Boot:** Enable or disable automatic background launch on Windows login with one click.
 - **Cryptographic Audit Verification:** Validate the SHA-256 tamper-evident audit journal.
 - **Windows Explorer Context Menu:** One-click registration/removal under `HKCU` without Administrator rights.
-- **File Categories:** Inspect all 150+ file extensions mapped to categories. User overrides are saved in `~/.smart_file_organizer/config.json`.
+- **File Categories:** Inspect all 150+ file extensions mapped to categories. User overrides are read from `~/.smart_file_organizer/config.json` (or `$SFO_DATA_DIR/config.json`).

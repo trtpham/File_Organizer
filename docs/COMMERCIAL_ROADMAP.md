@@ -29,3 +29,4 @@
 - **v2.2 (Sprint 2):** Windows Explorer context menu, Storage Treemap, Dev Junk cleaner, Secret DLP scanner.
 - **v2.3 (Sprint 3):** Cold Storage Archiver, Cloud Connector, Wireless LAN Drop.
 - **v3.0 (Enterprise Scaling Milestone):** Enterprise Guardrails, SFO Doctor, i18n Localization (EN/VI), Windows Task Scheduler, System Tray Daemon, and PyInstaller Standalone Packaging.
+- **v4.0 (Native Rust Rewrite):** Entire product rewritten in Rust — `sfo` CLI and `sfo-gui` desktop app (egui, replacing Tkinter); background jobs keep the window responsive; Argon2id + XChaCha20-Poly1305 vault v2; hardened LAN Drop; reads all v3.0 data.

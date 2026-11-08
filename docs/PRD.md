@@ -16,7 +16,7 @@ Users' computers, especially `Downloads`, `Desktop`, and shared network storage,
 6. Leaked credentials and API tokens in local folders represent significant security hazards.
 
 ## 2. Product Objectives
-- Provide a **zero-external-dependency** desktop & CLI tool runnable out-of-the-box on Python 3.10+.
+- Provide a **self-contained** desktop & CLI tool (native Rust executables, no runtime to install) for Windows, macOS and Linux.
 - Guarantee 100% data safety with transaction journaling and a 1-click Rollback mechanism.
 - Deliver lightning-fast duplicate detection using a **3-tiered hashing algorithm** (Size $\rightarrow$ 64KB partial hash $\rightarrow$ Full SHA-256) plus perceptual visual hashing (`dHash`).
 - Support multiple organization strategies: File Type (150+ extensions), Modification/Creation Date (`YYYY/MM`), File Size buckets, Custom Regular Expressions, and Smart Financial Routing (`Finance_<Year>/<Vendor>`).
@@ -32,8 +32,8 @@ Users' computers, especially `Downloads`, `Desktop`, and shared network storage,
 
 ## 4. Key Requirements & Acceptance Criteria
 - **AC-01 (Safe Dry-Run):** Running with `--dry-run` or checking "Dry-Run" in GUI MUST simulate all actions without moving or deleting any file.
-- **AC-02 (3-Tiered Deduplication):** Files with differing byte sizes must never be read from disk for hashing. Files with identical sizes and identical 64KB hashes must undergo full SHA-256 verification before being declared duplicates.
-- **AC-03 (Transaction Rollback):** Any live session must be 100% reversible via `python main.py --undo [session_id]` or GUI Undo button, returning files to original locations and cleaning empty category directories.
+- **AC-02 (3-Tiered Deduplication):** Files with differing byte sizes must never be read from disk for hashing. Files with identical sizes and identical 128KB hashes must undergo full SHA-256 verification before being declared duplicates.
+- **AC-03 (Transaction Rollback):** Any live session must be 100% reversible via `sfo --undo [session_id]` or GUI Undo button, returning files to original locations and cleaning empty category directories.
 - **AC-04 (Collision Safety):** If a destination file with the same name already exists, the tool must automatically rename with an incremented counter `filename (1).ext` unless configured otherwise.
 - **AC-05 (Download Stabilization):** Background watcher must wait until a downloading file size remains stable for 3 seconds and is not marked with `.crdownload` or `.tmp` before organizing.
 - **AC-06 (Smart Bulk Renaming):** Extract EXIF (date, camera) and ID3 tags with customizable template tokens and casing transforms.

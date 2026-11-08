@@ -1,6 +1,6 @@
 # Rust Migration Plan — Smart File Organizer v3.0 → v4.0 (Rust)
 
-Status: DRAFT — awaiting PO approval in `TRANSITION_APPROVAL.md`
+Status: P0–P7 implemented (see table in §5); approvals in `TRANSITION_APPROVAL.md`
 Date: 2026-11-08
 
 ## 1. Baseline (ground truth, surveyed 2026-11-08)
@@ -33,7 +33,7 @@ crates/
   sfo-cli/                 # `sfo` binary (clap), same subcommands/flags as Python
   sfo-gui/                 # `sfo-gui` binary (eframe/egui)
   sfo-compat-tests/        # golden tests: data written by Python, read by Rust
-smart_file_organizer/      # Python — untouched until Phase 7
+smart_file_organizer/      # Python — removed in Phase 7 (v4.0)
 ```
 
 ## 4. Module → crate mapping
@@ -82,7 +82,7 @@ smart_file_organizer/      # Python — untouched until Phase 7
 | P4 | Windows platform: shell menu, scheduler, tray/startup, doctor | Manual check on Windows 11 recorded in evidence — **DONE locally 2026-11-08** |
 | P5 | `sfo` CLI parity — every subcommand/flag in `docs/CLI_USAGE.md` | Ported `test_cli.py` cases pass against Rust binary — **DONE locally 2026-11-08** |
 | P6 | egui GUI — 9 tabs parity per `docs/GUI_GUIDE.md` | Manual walkthrough + screenshots — **Built 2026-11-08**; layout checked by self-captured screenshots; interactive click-through NOT_RUN |
-| P7 | Release: replace PyInstaller with `cargo build --release` artifacts in `release.yml`; delete Python package, `setup.py`, `pyproject.toml`, `sfo.spec`, `tests/`; update README + docs | PO sign-off on parity checklist |
+| P7 | Release: replace PyInstaller with `cargo build --release` artifacts in `release.yml`; delete Python package, `setup.py`, `pyproject.toml`, `sfo.spec`, `tests/`; update README + docs | PO sign-off on parity checklist — **DONE 2026-11-08**: Python removed, release workflow builds Rust archives, docs rewritten; first tagged release not yet built |
 
 ## 6. Intentional behaviour changes vs Python v3.0
 

@@ -11,7 +11,7 @@ Requested mode: `ACTIVE_DEVELOPMENT` — full rewrite Python → Rust
 - [x] Rust toolchain available (cargo/rustc 1.99.0)
 - [x] PO decisions D1–D4 recorded (`RUST_MIGRATION_PLAN.md` §2)
 - [x] PO approves plan and phase order
-- [ ] PO approves deleting the Python codebase at Phase 7 (irreversible on `main`; history kept in git) — re-confirm at start of P7
+- [x] PO approves deleting the Python codebase at Phase 7 (history kept in git) — confirmed 2026-11-08: "chuyển full 100% sang Rust nha, Frontend ko dùng Tkinter"
 
 ## Approval
 
@@ -19,5 +19,5 @@ Requested mode: `ACTIVE_DEVELOPMENT` — full rewrite Python → Rust
 |---|---|
 | Approved by (PO) | Raven (Pham Minh Triet) |
 | Date | 2026-11-08 |
-| Scope approved | `RUST_MIGRATION_PLAN.md` P0–P6; P7 deletion needs separate confirmation |
-| Notes | Mode switched to `ACTIVE_DEVELOPMENT` for new Rust code under `crates/`. Python code stays read-only until P7. |
+| Scope approved | `RUST_MIGRATION_PLAN.md` P0–P7 |
+| Notes | Mode switched to `ACTIVE_DEVELOPMENT` for new Rust code under `crates/`. P7 approved the same day: Python package, tests, packaging and CI removed; the product is Rust-only from v4.0. |
