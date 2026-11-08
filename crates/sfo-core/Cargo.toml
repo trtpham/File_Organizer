@@ -1,0 +1,46 @@
+[package]
+name = "sfo-core"
+description = "Smart File Organizer domain engine (scanner, hasher, organizer, undo, vault, ...)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+aes-gcm.workspace = true
+argon2.workspace = true
+chacha20poly1305.workspace = true
+getrandom.workspace = true
+hmac.workspace = true
+pbkdf2.workspace = true
+tiny_http.workspace = true
+zeroize.workspace = true
+zip.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+dunce.workspace = true
+hex.workspace = true
+image.workspace = true
+kamadak-exif.workspace = true
+lopdf.workspace = true
+md-5.workspace = true
+rayon.workspace = true
+regex.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+unicode-normalization.workspace = true
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+sysinfo.workspace = true
+winreg.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

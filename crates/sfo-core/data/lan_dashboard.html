@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SFO Wireless LAN Drop</title>
+    <style>
+        body { background: #0b0f19; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }
+        .card { background: #131d31; border: 1px solid #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .upload-zone { border: 2px dashed #334155; border-radius: 8px; padding: 24px; text-align: center; background: #0f172a; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+        input[type="file"] { display: block; margin: 12px auto; color: #94a3b8; }
+        .btn { background: #10b981; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .btn:hover { background: #059669; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1 style="margin: 0; font-size: 22px;">📡 Smart File Organizer - LAN Drop</h1>
+                <p style="margin: 4px 0 0; color: #94a3b8; font-size: 13px;">Shared folder: {{SHARED_NAME}}</p>
+            </div>
+            <span style="background: #1e293b; color: #38bdf8; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">LAN Connected (Multi-Threaded)</span>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top: 0;">📤 Send Files to PC</h3>
+            <form method="POST" action="/upload" enctype="multipart/form-data" class="upload-zone">
+                <p style="margin: 0; color: #94a3b8;">Select files to transfer from your phone or device to PC:</p>
+                <input type="file" name="files" multiple required>
+                <button type="submit" class="btn">🚀 Upload Files to PC</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top: 0;">📥 Available Files to Download ({{COUNT}})</h3>
+            <table>
+                <thead>
+                    <tr style="color: #64748b; border-bottom: 1px solid #1e293b;">
+                        <th style="padding: 10px;">Name</th>
+                        <th style="padding: 10px;">Size</th>
+                        <th style="padding: 10px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ROWS}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

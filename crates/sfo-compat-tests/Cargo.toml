@@ -1,0 +1,20 @@
+[package]
+name = "sfo-compat-tests"
+description = "Golden tests: data written by the Python v3.0 build must load in the Rust build."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+sfo-core.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

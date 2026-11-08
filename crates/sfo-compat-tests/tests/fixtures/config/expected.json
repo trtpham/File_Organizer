@@ -1,0 +1,36 @@
+{
+  "python_commit": "c0c68c96b01147de0655291d6342f765c156152f",
+  "category_for_extension": {
+    ".png": "Images",
+    "docx": "Documents",
+    ".PY": "Code",
+    ".ts": "Code",
+    ".xyz123": "Others",
+    "": "Others",
+    "jpg": "Images"
+  },
+  "is_ignored": {
+    ".git": true,
+    "desktop.ini": true,
+    "video.mp4.crdownload": true,
+    "temp.tmp": true,
+    "document.pdf": false,
+    "Thumbs.DB": true,
+    "a/.git/b": true,
+    "C:\\x\\$RECYCLE.BIN": true,
+    "file.part2": false
+  },
+  "size_folder": {
+    "0": "Tiny (< 1MB)",
+    "500": "Tiny (< 1MB)",
+    "1048575": "Tiny (< 1MB)",
+    "1048576": "Small (1MB - 10MB)",
+    "5242880": "Small (1MB - 10MB)",
+    "52428800": "Medium (10MB - 100MB)",
+    "524288000": "Large (100MB - 1GB)",
+    "1073741824": "Huge (> 1GB)",
+    "2147483648": "Huge (> 1GB)"
+  },
+  "collision_strategy": "auto_rename",
+  "date_format": "YYYY/MM"
+}
