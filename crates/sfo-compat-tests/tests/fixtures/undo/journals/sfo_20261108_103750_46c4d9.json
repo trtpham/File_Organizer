@@ -1,0 +1,27 @@
+{
+  "session_id": "sfo_20261108_103750_46c4d9",
+  "start_time": "2026-11-08T10:37:50.949644",
+  "end_time": "2026-11-08T10:37:50.950071",
+  "source_dir": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code",
+  "destination_dir": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code",
+  "strategy": "rename",
+  "dry_run": false,
+  "total_files": 1,
+  "total_size_bytes": 21,
+  "moved_count": 1,
+  "skipped_count": 0,
+  "duplicate_count": 0,
+  "space_saved_bytes": 0,
+  "records": [
+    {
+      "action_type": "RENAME",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code\\script.py",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code\\renamed_script.py",
+      "file_size": 21,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "Moved to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code\\renamed_script.py",
+      "timestamp": "2026-11-08T10:37:50.949616"
+    }
+  ]
+}

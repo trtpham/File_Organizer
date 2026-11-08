@@ -63,3 +63,6 @@ logs/
 *.log
 _Duplicates/
 report.html
+
+# Rust
+/target/

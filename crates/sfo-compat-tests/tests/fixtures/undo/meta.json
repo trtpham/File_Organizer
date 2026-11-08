@@ -1,0 +1,23 @@
+{
+  "python_commit": "c0c68c96b01147de0655291d6342f765c156152f",
+  "root": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_",
+  "sessions": {
+    "organize": "sfo_20261108_103750_612238",
+    "dry_run": "sfo_20261108_103750_250121",
+    "rename": "sfo_20261108_103750_46c4d9"
+  },
+  "original_files": {
+    "photo1.jpg": "JPEG_IMAGE_DATA_12345",
+    "report.pdf": "PDF_DOCUMENT_CONTENT_ABCDE",
+    "notes.txt": "PLAIN_TEXT_NOTES",
+    "tài liệu.docx": "UNICODE_NAME_CONTENT",
+    "script.py": "print('Hello world!')"
+  },
+  "state_after_sessions": {
+    "Code/renamed_script.py": "print('Hello world!')",
+    "Documents/notes.txt": "PLAIN_TEXT_NOTES",
+    "Documents/report.pdf": "PDF_DOCUMENT_CONTENT_ABCDE",
+    "Documents/tài liệu.docx": "UNICODE_NAME_CONTENT",
+    "Images/photo1.jpg": "JPEG_IMAGE_DATA_12345"
+  }
+}

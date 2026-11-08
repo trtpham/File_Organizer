@@ -1,0 +1,67 @@
+//! Smart File Organizer core engine.
+//!
+//! Rust port of `smart_file_organizer/core/`. Modules land phase by phase;
+//! see `docs/brownfield/RUST_MIGRATION_PLAN.md`.
+
+pub mod archiver;
+pub mod cloud;
+pub mod config;
+pub mod dedup;
+pub mod error;
+pub mod executor;
+pub mod fnmatch;
+pub mod fsutil;
+pub mod guardrails;
+pub mod hasher;
+pub mod i18n;
+pub mod junk;
+pub mod lan_share;
+pub mod models;
+pub mod organizer;
+pub mod paths;
+pub mod pyjson;
+pub mod renamer;
+pub mod reporter;
+pub mod scanner;
+pub mod secrets;
+pub mod shredder;
+pub mod smart_filter;
+pub mod syncer;
+pub mod treemap;
+pub mod undo;
+pub mod vault;
+pub mod visual_hasher;
+pub mod watcher;
+
+pub use error::{Result, SfoError};
+
+/// Crate version, shared by the CLI and GUI.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Application data directory name under the user's home, shared with the
+/// Python v3.0 build so existing history and journals stay readable.
+pub const APP_DIR_NAME: &str = ".smart_file_organizer";
+
+/// `~/.smart_file_organizer`, falling back to the current directory when the
+/// home directory cannot be determined.
+pub fn default_data_dir() -> std::path::PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(APP_DIR_NAME)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_is_set() {
+        assert!(VERSION.starts_with("4."));
+    }
+
+    #[test]
+    fn app_dir_matches_python_build() {
+        assert_eq!(APP_DIR_NAME, ".smart_file_organizer");
+        assert!(default_data_dir().ends_with(APP_DIR_NAME));
+    }
+}

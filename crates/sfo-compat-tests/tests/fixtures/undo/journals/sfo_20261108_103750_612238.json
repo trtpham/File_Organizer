@@ -1,0 +1,67 @@
+{
+  "session_id": "sfo_20261108_103750_612238",
+  "start_time": "2026-11-08T10:37:50.904615",
+  "end_time": "2026-11-08T10:37:50.907110",
+  "source_dir": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_",
+  "destination_dir": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_",
+  "strategy": "extension",
+  "dry_run": false,
+  "total_files": 5,
+  "total_size_bytes": 104,
+  "moved_count": 5,
+  "skipped_count": 0,
+  "duplicate_count": 0,
+  "space_saved_bytes": 0,
+  "records": [
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\notes.txt",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\notes.txt",
+      "file_size": 16,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "Moved to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\notes.txt",
+      "timestamp": "2026-11-08T10:37:50.903468"
+    },
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\photo1.jpg",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Images\\photo1.jpg",
+      "file_size": 21,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "Moved to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Images\\photo1.jpg",
+      "timestamp": "2026-11-08T10:37:50.903706"
+    },
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\report.pdf",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\report.pdf",
+      "file_size": 26,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "Moved to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\report.pdf",
+      "timestamp": "2026-11-08T10:37:50.903932"
+    },
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\script.py",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code\\script.py",
+      "file_size": 21,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "Moved to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Code\\script.py",
+      "timestamp": "2026-11-08T10:37:50.904136"
+    },
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\tài liệu.docx",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\tài liệu.docx",
+      "file_size": 20,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "Moved to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\tài liệu.docx",
+      "timestamp": "2026-11-08T10:37:50.904382"
+    }
+  ]
+}

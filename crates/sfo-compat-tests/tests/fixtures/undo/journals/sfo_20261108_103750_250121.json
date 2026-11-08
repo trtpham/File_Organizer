@@ -1,0 +1,47 @@
+{
+  "session_id": "sfo_20261108_103750_250121",
+  "start_time": "2026-11-08T10:37:50.931607",
+  "end_time": "2026-11-08T10:37:50.931697",
+  "source_dir": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_",
+  "destination_dir": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_",
+  "strategy": "extension",
+  "dry_run": true,
+  "total_files": 3,
+  "total_size_bytes": 62,
+  "moved_count": 3,
+  "skipped_count": 0,
+  "duplicate_count": 0,
+  "space_saved_bytes": 0,
+  "records": [
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\notes.txt",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\Documents\\notes.txt",
+      "file_size": 16,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "[DRY-RUN] Planned action to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\Documents\\notes.txt",
+      "timestamp": "2026-11-08T10:37:50.931111"
+    },
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\report.pdf",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\Documents\\report.pdf",
+      "file_size": 26,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "[DRY-RUN] Planned action to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\Documents\\report.pdf",
+      "timestamp": "2026-11-08T10:37:50.931336"
+    },
+    {
+      "action_type": "MOVE",
+      "source_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\tài liệu.docx",
+      "destination_path": "C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\Documents\\tài liệu.docx",
+      "file_size": 20,
+      "file_hash": null,
+      "status": "SUCCESS",
+      "message": "[DRY-RUN] Planned action to C:\\Users\\MSII\\AppData\\Local\\Temp\\sfo_fixture_jlxtj26_\\Documents\\Documents\\tài liệu.docx",
+      "timestamp": "2026-11-08T10:37:50.931570"
+    }
+  ]
+}
