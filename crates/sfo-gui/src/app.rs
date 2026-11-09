@@ -199,6 +199,9 @@ pub struct App {
     pub sec: SecurityTab,
     pub sys: SystemTab,
     capture: Option<Capture>,
+    /// Path returned by the next file dialog in tests.
+    #[cfg(test)]
+    pub test_pick: Option<PathBuf>,
 }
 
 fn home_sub(name: &str) -> String {
@@ -208,8 +211,8 @@ fn home_sub(name: &str) -> String {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, source: Option<String>) -> Self {
-        theme::apply(&cc.egui_ctx);
+    pub fn new(ctx: &egui::Context, source: Option<String>) -> Self {
+        theme::apply(ctx);
         let (tx, rx) = channel();
         let config = Config::load(None).unwrap_or_default();
         let undo = UndoManager::new(None).ok();
@@ -264,6 +267,8 @@ impl App {
                 ..Default::default()
             },
             capture: None,
+            #[cfg(test)]
+            test_pick: None,
             sys: SystemTab { doctor_status: "System Status: Ready to diagnose".into(), ..Default::default() },
         };
         if app.undo.is_none() {
@@ -316,6 +321,47 @@ impl App {
             return None;
         }
         Some(path)
+    }
+
+    /// [`Self::existing_dir`] plus the guardrail the CLI applies: drive roots
+    /// and system folders are refused for anything that moves or deletes files.
+    pub fn allowed_dir(&mut self, p: &str) -> Option<PathBuf> {
+        let dir = self.existing_dir(p)?;
+        if let Some(reason) = sfo_core::guardrails::protected_reason(&dir) {
+            self.error(
+                &sfo_core::i18n::t("guardrail_alert"),
+                format!(
+                    "{}
+
+{reason}",
+                    sfo_core::i18n::t("protected_path_warning")
+                ),
+            );
+            return None;
+        }
+        Some(dir)
+    }
+
+    /// Native "save as" dialog (replaced by `test_pick` in tests).
+    pub fn choose_save(&mut self, dialog: rfd::FileDialog) -> Option<PathBuf> {
+        #[cfg(test)]
+        {
+            let _ = dialog;
+            self.test_pick.take()
+        }
+        #[cfg(not(test))]
+        dialog.save_file()
+    }
+
+    /// Native folder dialog (replaced by `test_pick` in tests).
+    pub fn choose_folder(&mut self, dialog: rfd::FileDialog) -> Option<PathBuf> {
+        #[cfg(test)]
+        {
+            let _ = dialog;
+            self.test_pick.take()
+        }
+        #[cfg(not(test))]
+        dialog.pick_folder()
     }
 
     fn poll_jobs(&mut self) {
@@ -439,8 +485,25 @@ impl Capture {
     }
 }
 
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl App {
+    /// One UI frame. eframe calls it through `update`; the headless tests
+    /// drive it directly.
+    pub fn frame(&mut self, ctx: &egui::Context) {
+        // Closing mid-operation could cut a move short before its session is
+        // journaled, leaving files that undo cannot find.
+        if self.busy.is_some() && ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if !self
+                .dialogs
+                .iter()
+                .any(|d| d.title == "Operation in progress")
+            {
+                self.dialogs.push(Dialog::warn(
+                    "Operation in progress",
+                    "Please wait until the current operation finishes before closing Smart File Organizer.",
+                ));
+            }
+        }
         if let Some(mut c) = self.capture.take() {
             c.step(ctx);
             self.capture = Some(c);
@@ -515,3 +578,9 @@ impl eframe::App for App {
 }
 
 // The LAN server stops in `LanShareServer::drop` when the app closes.
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.frame(ctx);
+    }
+}

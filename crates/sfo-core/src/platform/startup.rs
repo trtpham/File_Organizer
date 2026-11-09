@@ -5,9 +5,20 @@ use super::ActionResult;
 pub const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 pub const APP_NAME: &str = "SmartFileOrganizer";
 
-/// Default command: the `sfo` CLI in watcher mode.
+/// Default command: the `sfo` CLI watching the user's Downloads folder.
+///
+/// The folder must be explicit: programs started from the Run key get
+/// `C:\Windows\System32` as their working directory, which the guardrails
+/// refuse, so a bare `--watch` (as in v3.0) exited at every login.
 pub fn default_command() -> String {
-    format!("\"{}\" --watch", super::sibling_exe("sfo"))
+    let downloads = dirs::download_dir()
+        .or_else(|| dirs::home_dir().map(|h| h.join("Downloads")))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    format!(
+        "\"{}\" --source \"{}\" --watch",
+        super::sibling_exe("sfo"),
+        downloads.display()
+    )
 }
 
 pub fn is_autostart_enabled() -> bool {
@@ -80,7 +91,12 @@ mod tests {
 
     #[test]
     fn default_command_watches() {
-        assert!(default_command().ends_with("\" --watch"));
+        let cmd = default_command();
+        assert!(cmd.ends_with("\" --watch"), "{cmd}");
+        assert!(
+            cmd.contains("--source \""),
+            "watcher needs an explicit folder: {cmd}"
+        );
         let _ = is_autostart_enabled();
     }
 

@@ -81,7 +81,7 @@ smart_file_organizer/      # Python — removed in Phase 7 (v4.0)
 | P3 | junk, secrets, treemap, archiver, syncer, watcher, cloud, lan_share, shredder, vault | Vault: Rust opens Python v1 vault; new v2 AEAD round-trips — **DONE locally 2026-11-08** |
 | P4 | Windows platform: shell menu, scheduler, tray/startup, doctor | Manual check on Windows 11 recorded in evidence — **DONE locally 2026-11-08** |
 | P5 | `sfo` CLI parity — every subcommand/flag in `docs/CLI_USAGE.md` | Ported `test_cli.py` cases pass against Rust binary — **DONE locally 2026-11-08** |
-| P6 | egui GUI — 9 tabs parity per `docs/GUI_GUIDE.md` | Manual walkthrough + screenshots — **Built 2026-11-08**; layout checked by self-captured screenshots; interactive click-through NOT_RUN |
+| P6 | egui GUI — 9 tabs parity per `docs/GUI_GUIDE.md` | Manual walkthrough + screenshots — **Built 2026-11-08**; layout checked by self-captured screenshots; every tab clicked through by the headless `gui_tests::click_through_all_tabs` (egui_kittest) on 2026-11-09 |
 | P7 | Release: replace PyInstaller with `cargo build --release` artifacts in `release.yml`; delete Python package, `setup.py`, `pyproject.toml`, `sfo.spec`, `tests/`; update README + docs | PO sign-off on parity checklist — **DONE 2026-11-08**: Python removed, release workflow builds Rust archives, docs rewritten; first tagged release not yet built |
 
 ## 6. Intentional behaviour changes vs Python v3.0
@@ -108,6 +108,8 @@ Recorded so P5/P6 parity reviews don't flag them as regressions.
 | Doctor | "Python Runtime", Pillow/PyMuPDF accelerators | "SFO Runtime", "Built-in Modules" | Native build |
 | GUI | Tkinter; long work on the UI thread (window freezes) | egui; long work on a worker thread with a spinner, one job at a time | Responsiveness |
 | GUI text | Hard-coded English | Tab names and main buttons go through `i18n`, so the language setting applies immediately | Translations existed but were unused |
+| GUI safety | No guardrail in the GUI; window could be closed mid-operation | Organize, dedupe, rename, cold-archive, junk and quarantine refuse drive roots and system folders like the CLI; closing is blocked while a job runs | Consistency / data safety |
+| Autostart command | `python main.py --watch` (no folder → started in System32 and was refused) | `sfo --source "<Downloads>" --watch` | Feature never worked |
 
 ## 7. Risks
 

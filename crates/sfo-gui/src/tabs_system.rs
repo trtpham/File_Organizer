@@ -74,7 +74,7 @@ impl App {
         ui.horizontal(|ui| {
             ui.label(theme::header("Recorded Organization Sessions"));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if widgets::button(ui, Kind::Secondary, "🔄 Refresh").clicked() {
+                if widgets::button(ui, Kind::Secondary, &i18n::t("refresh")).clicked() {
                     self.load_history();
                 }
                 if widgets::button_enabled(
@@ -552,7 +552,8 @@ impl App {
                     .map(|c| vec![c.name.clone(), c.status.as_str().into(), c.message.clone()])
                     .collect();
                 self.sys.doctor_status = format!(
-                    "System Status: {} ({} PASS, {} WARN, {} FAIL)",
+                    "{} {} ({} PASS, {} WARN, {} FAIL)",
+                    i18n::t("overall_health"),
                     r.overall_status(),
                     r.pass_count(),
                     r.warn_count(),

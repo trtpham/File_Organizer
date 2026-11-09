@@ -3,6 +3,8 @@
 
 mod app;
 mod dialog;
+#[cfg(test)]
+mod gui_tests;
 mod tabs_main;
 mod tabs_system;
 mod tabs_tools;
@@ -30,6 +32,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Smart File Organizer",
         options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, source)))),
+        Box::new(move |cc| Ok(Box::new(app::App::new(&cc.egui_ctx, source)))),
     )
 }

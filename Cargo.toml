@@ -14,6 +14,7 @@ repository = "https://github.com/trtpham/File_Organizer"
 eframe = "0.31"
 egui = "0.31"
 egui_extras = "0.31"
+egui_kittest = "0.31"
 rfd = "0.15"
 anstream = "0.6"
 clap = { version = "4", features = ["derive"] }

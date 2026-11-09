@@ -76,10 +76,18 @@ impl App {
     pub fn organize_ui(&mut self, ui: &mut Ui) {
         let idle = self.idle();
         widgets::card(ui, |ui| {
-            widgets::folder_picker(ui, "Source Folder:", &mut self.org.source);
-            widgets::folder_picker(ui, "Destination Folder:", &mut self.org.dest);
+            widgets::folder_picker(
+                ui,
+                sfo_core::i18n::t("source_folder").trim(),
+                &mut self.org.source,
+            );
+            widgets::folder_picker(
+                ui,
+                sfo_core::i18n::t("dest_folder").trim(),
+                &mut self.org.dest,
+            );
             ui.horizontal(|ui| {
-                ui.label("Strategy:");
+                ui.label(sfo_core::i18n::t("strategy"));
                 combo(
                     ui,
                     "org_strategy",
@@ -146,10 +154,26 @@ impl App {
     }
 
     pub fn preview_organize(&mut self, then_execute: bool) {
-        let Some(source) = self.existing_dir(&self.org.source.clone()) else {
+        let Some(source) = self.allowed_dir(&self.org.source.clone()) else {
             return;
         };
+        // An empty destination means "same as source", as in the CLI.
+        if self.org.dest.trim().is_empty() {
+            self.org.dest = self.org.source.clone();
+        }
         let dest = PathBuf::from(self.org.dest.trim());
+        if let Some(reason) = sfo_core::guardrails::protected_reason(&dest) {
+            self.error(
+                &sfo_core::i18n::t("guardrail_alert"),
+                format!(
+                    "{}
+
+{reason}",
+                    sfo_core::i18n::t("protected_path_warning")
+                ),
+            );
+            return;
+        }
         let config = self.config.clone();
         let strategy = OrganizeStrategy::parse(&self.org.strategy).unwrap_or_default();
         let opts = PlanOptions {
@@ -324,7 +348,7 @@ impl App {
     }
 
     pub fn scan_duplicates(&mut self) {
-        let Some(dir) = self.existing_dir(&self.dup.folder.clone()) else {
+        let Some(dir) = self.allowed_dir(&self.dup.folder.clone()) else {
             return;
         };
         let mut config = self.config.clone();
@@ -489,7 +513,11 @@ impl App {
     pub fn rename_ui(&mut self, ui: &mut Ui) {
         let idle = self.idle();
         widgets::card(ui, |ui| {
-            widgets::folder_picker(ui, "Source Folder:", &mut self.ren.folder);
+            widgets::folder_picker(
+                ui,
+                sfo_core::i18n::t("source_folder").trim(),
+                &mut self.ren.folder,
+            );
             ui.horizontal(|ui| {
                 ui.label("Template:");
                 ui.add_sized(
@@ -555,7 +583,7 @@ impl App {
     }
 
     pub fn preview_rename(&mut self, then_execute: bool) {
-        let Some(dir) = self.existing_dir(&self.ren.folder.clone()) else {
+        let Some(dir) = self.allowed_dir(&self.ren.folder.clone()) else {
             return;
         };
         let config = self.config.clone();

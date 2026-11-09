@@ -84,7 +84,11 @@ impl App {
                     }
                 });
             });
-            widgets::folder_picker(ui, "Source Folder:", &mut self.sync.usb_source);
+            widgets::folder_picker(
+                ui,
+                sfo_core::i18n::t("source_folder").trim(),
+                &mut self.sync.usb_source,
+            );
             widgets::folder_picker(ui, "Target / USB Path:", &mut self.sync.usb_dest);
             ui.horizontal(|ui| {
                 ui.label("Sync Mode:");
@@ -170,7 +174,11 @@ impl App {
                     self.refresh_clouds();
                 }
             });
-            widgets::folder_picker(ui, "Source Folder:", &mut self.sync.cloud_source);
+            widgets::folder_picker(
+                ui,
+                sfo_core::i18n::t("source_folder").trim(),
+                &mut self.sync.cloud_source,
+            );
             ui.horizontal(|ui| {
                 ui.label("Cloud Subfolder:");
                 ui.add_sized(
@@ -362,7 +370,7 @@ impl App {
     }
 
     pub fn scan_cold(&mut self) {
-        let Some(dir) = self.existing_dir(&self.sync.cold_folder.clone()) else {
+        let Some(dir) = self.allowed_dir(&self.sync.cold_folder.clone()) else {
             return;
         };
         let days: u64 = self.sync.cold_days.trim().parse().unwrap_or(90);
@@ -476,7 +484,7 @@ impl App {
     }
 
     pub fn scan_junk(&mut self) {
-        let Some(dir) = self.existing_dir(&self.sec.junk_folder.clone()) else {
+        let Some(dir) = self.allowed_dir(&self.sec.junk_folder.clone()) else {
             return;
         };
         self.spawn("Scanning for developer junk...", move || {
@@ -543,7 +551,7 @@ impl App {
     }
 
     pub fn scan_secrets(&mut self) {
-        let Some(dir) = self.existing_dir(&self.sec.secret_folder.clone()) else {
+        let Some(dir) = self.allowed_dir(&self.sec.secret_folder.clone()) else {
             return;
         };
         self.spawn("Scanning for sensitive credentials...", move || {
@@ -768,13 +776,13 @@ impl App {
             return;
         }
         let default = src.with_extension(vault::EXTENSION);
-        let Some(dst) = rfd::FileDialog::new()
-            .set_title("Save Vault Container As")
-            .set_directory(src.parent().unwrap_or(&src))
-            .set_file_name(sfo_core::fsutil::name_of(&default))
-            .add_filter("SFO Vault Container", &["sfovault"])
-            .save_file()
-        else {
+        let Some(dst) = self.choose_save(
+            rfd::FileDialog::new()
+                .set_title("Save Vault Container As")
+                .set_directory(src.parent().unwrap_or(&src))
+                .set_file_name(sfo_core::fsutil::name_of(&default))
+                .add_filter("SFO Vault Container", &["sfovault"]),
+        ) else {
             return;
         };
         let shred = self.sec.vault_shred;
@@ -814,11 +822,11 @@ impl App {
         let Some((v, pw)) = self.vault_inputs("") else {
             return;
         };
-        let Some(dest) = rfd::FileDialog::new()
-            .set_title("Select Destination Folder for Unlocked Files")
-            .set_directory(v.parent().unwrap_or(&v))
-            .pick_folder()
-        else {
+        let Some(dest) = self.choose_folder(
+            rfd::FileDialog::new()
+                .set_title("Select Destination Folder for Unlocked Files")
+                .set_directory(v.parent().unwrap_or(&v)),
+        ) else {
             return;
         };
         self.sec.vault_unlock_pw.clear();

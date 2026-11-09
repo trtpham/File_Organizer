@@ -22,5 +22,9 @@ image.workspace = true
 rfd.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+egui_kittest.workspace = true
+tempfile.workspace = true
+
 [lints]
 workspace = true

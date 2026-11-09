@@ -11,6 +11,10 @@ hashing, moves, encryption — run in the background: the status bar shows a
 spinner and the action buttons are disabled until the job finishes. Every
 confirmation and result appears in a dialog inside the window.
 
+While a job runs the window cannot be closed, so a move is never cut off before
+it is recorded for undo. Folders that move or delete files are checked against
+the same guardrails as the CLI: drive roots and system folders are refused.
+
 ---
 
 ## Tabs & Navigation
