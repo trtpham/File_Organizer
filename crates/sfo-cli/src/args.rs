@@ -240,6 +240,11 @@ pub struct Args {
     #[arg(short = 'c', long)]
     pub config: Option<String>,
 
+    /// Proceed even when a live operation exceeds the blast-radius limit
+    /// (`blast_radius` in the config; default 500 files / 10 GB)
+    #[arg(long)]
+    pub force: bool,
+
     /// Launch the Desktop GUI
     #[arg(short = 'g', long)]
     pub gui: bool,

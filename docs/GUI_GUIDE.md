@@ -11,6 +11,10 @@ hashing, moves, encryption — run in the background: the status bar shows a
 spinner and the action buttons are disabled until the job finishes. Every
 confirmation and result appears in a dialog inside the window.
 
+Scans, hashing and file moves show a progress bar in the status bar with a **✖ Cancel** button. Cancelling a scan changes nothing; cancelling a move stops before the next file, and what was already moved can be undone.
+
+Live actions that would touch more than the blast-radius limit (default 500 files or 10 GB, `blast_radius` in `config.json`) ask for confirmation with a red warning first.
+
 While a job runs the window cannot be closed, so a move is never cut off before
 it is recorded for undo. Folders that move or delete files are checked against
 the same guardrails as the CLI: drive roots and system folders are refused.
@@ -24,7 +28,9 @@ the same guardrails as the CLI: drive roots and system folders are refused.
 - **Strategy Selector:** Choose between `extension`, `date`, `size`, or `regex`.
 - **Smart Financial Sort Checkbox:** Automatically analyzes PDF/image text and routes invoices and bills into `Finance_<Year>/<Vendor>`.
 - **Dry-Run Checkbox:** Enabled by default for 100% safe preview before execution.
+- **Include subfolders:** Also organizes files inside subfolders of the source (the destination folder is skipped).
 - **Preview Actions & Execute Now:** Real-time diff table with one-click live execution.
+- **Folder Watcher:** *Start Watching* organizes every new file in the Source Folder as soon as its download finishes, using the folders and strategy above; each file becomes its own undoable session and appears in the watcher log. Manual Preview/Execute and the folder fields are locked while it runs; *Stop Watching* ends it.
 
 ### 2. 🔍 Duplicate Center (Exact Hash & Visual pHash)
 - **Dual Deduplication Modes:**
@@ -88,4 +94,5 @@ the same guardrails as the CLI: drive roots and system folders are refused.
 - **Windows Autostart on Boot:** Enable or disable automatic background launch on Windows login with one click.
 - **Cryptographic Audit Verification:** Validate the SHA-256 tamper-evident audit journal.
 - **Windows Explorer Context Menu:** One-click registration/removal under `HKCU` without Administrator rights.
+- **Custom Regex Rules:** Add, edit and remove the rules used by the `regex` strategy. Each rule is checked as you type (invalid patterns and folders that leave the destination, such as `..` or `C:\`, are marked ✖), a test box shows which folder a file name would go to, and **Save Rules** writes them to your `config.json`.
 - **File Categories:** Inspect all 150+ file extensions mapped to categories. User overrides are read from `~/.smart_file_organizer/config.json` (or `$SFO_DATA_DIR/config.json`).

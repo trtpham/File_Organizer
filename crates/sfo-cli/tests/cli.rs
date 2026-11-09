@@ -246,3 +246,34 @@ fn scan_secrets_and_junk() {
     assert_eq!(code, 0);
     assert!(out.contains("__pycache__"));
 }
+
+#[test]
+fn blast_radius_needs_force() {
+    let e = Env::new();
+    let ws = e.ws.path();
+    for n in ["a.txt", "b.pdf", "c.jpg"] {
+        fs::write(ws.join(n), n).unwrap();
+    }
+    let cfg = e.data.path().join("small_limit.json");
+    fs::write(&cfg, r#"{"blast_radius": {"max_files": 2}}"#).unwrap();
+    let cfg = s(&cfg);
+
+    let (code, out) = e.sfo(&["--source", &s(ws), "--config", &cfg]);
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains("Operation impacts 3 files") && out.contains("--force"),
+        "{out}"
+    );
+    assert!(ws.join("a.txt").exists(), "nothing moved");
+
+    assert_eq!(
+        e.sfo(&["--source", &s(ws), "--config", &cfg, "--dry-run"])
+            .0,
+        0,
+        "dry runs are never blocked"
+    );
+
+    let (code, out) = e.sfo(&["--source", &s(ws), "--config", &cfg, "--force"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(ws.join("Documents/a.txt").exists());
+}

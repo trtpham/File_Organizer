@@ -171,17 +171,39 @@ impl VisualSimilarityEngine {
     }
 
     pub fn find_visual_duplicates(&self, files: &[FileInfo]) -> Vec<VisualDuplicateGroup> {
+        self.find_visual_duplicates_ctl(files, None)
+            .expect("only a Control can cancel")
+    }
+
+    /// [`Self::find_visual_duplicates`] that ticks `ctl` per image and stops
+    /// when it is cancelled.
+    pub fn find_visual_duplicates_ctl(
+        &self,
+        files: &[FileInfo],
+        ctl: Option<&crate::progress::Control>,
+    ) -> crate::Result<Vec<VisualDuplicateGroup>> {
         let images: Vec<&FileInfo> = files
             .iter()
             .filter(|f| IMAGE_EXTENSIONS.contains(&f.extension.to_lowercase().as_str()))
             .collect();
         if images.len() < 2 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
+        crate::progress::stage(ctl, "Hashing images", images.len() as u64);
         let hashes: HashMap<PathBuf, u64> = images
             .par_iter()
-            .filter_map(|f| compute_dhash(&f.path).map(|h| (f.path.clone(), h)))
+            .filter_map(|f| {
+                if crate::progress::cancelled(ctl) {
+                    return None;
+                }
+                let h = compute_dhash(&f.path).map(|h| (f.path.clone(), h));
+                crate::progress::tick(ctl, 1);
+                h
+            })
             .collect();
+        if crate::progress::cancelled(ctl) {
+            return Err(crate::SfoError::Cancelled);
+        }
 
         let mut clusters: Vec<Vec<&FileInfo>> = Vec::new();
         let mut visited: HashSet<&Path> = HashSet::new();
@@ -210,7 +232,7 @@ impl VisualSimilarityEngine {
             }
         }
 
-        clusters
+        Ok(clusters
             .into_iter()
             .map(|cluster| {
                 // Largest (size, name) first, then highest resolution wins.
@@ -247,7 +269,7 @@ impl VisualSimilarityEngine {
                     suggested_keep: Some(best.clone()),
                 }
             })
-            .collect()
+            .collect())
     }
 }
 

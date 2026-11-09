@@ -32,7 +32,7 @@ schtasks /Create /TN "SmartFileOrganizer_DailySweep" /TR "\"C:\Program Files\SFO
 ## 4. Enterprise Safety Guardrails & Blacklist
 SFO enforces safety boundaries to protect system integrity:
 1. **Critical Path Blacklist:** Direct execution against `C:\Windows`, `C:\Program Files`, `C:\System Volume Information`, and root volume paths (`C:\`) is blocked by default.
-2. **Confirmation and undo:** The desktop app asks before every live, destructive or bulk action, and every organize, dedupe and rename session can be undone. (A blast-radius check — 500 files / 10 GB — exists in the engine but is not yet enforced by the CLI or app.)
+2. **Blast Radius Limiter:** A live operation that would touch more than `blast_radius.max_files` (default 500) files or `blast_radius.max_bytes` (default 10 GB) is refused by the CLI unless `--force` is given, and needs an explicit red confirmation in the desktop app. Every organize, dedupe and rename session can be undone.
 3. **Cryptographic SHA-256 Audit Chain:** Every session, shred and vault action appends a hashed record to `~/.smart_file_organizer/audit_chain.jsonl`.
    - To verify log integrity for SOC2/compliance:
      ```cmd

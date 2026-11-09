@@ -1,7 +1,7 @@
 //! Tabs 1–4: Organize, Duplicate Center, Smart Renamer, Storage Treemap.
 
 use crate::app::{App, Done, SessionKind};
-use crate::dialog::{Confirmed, Dialog};
+use crate::dialog::Confirmed;
 use crate::theme;
 use crate::widgets::{self, Kind};
 use egui::{Align, Layout, Ui};
@@ -14,6 +14,7 @@ use sfo_core::renamer::{self, RenameOptions};
 use sfo_core::reporter::format_bytes;
 use sfo_core::scanner::{FileScanner, ScanOptions};
 use sfo_core::treemap;
+use sfo_core::watcher::DirectoryWatcher;
 use std::path::PathBuf;
 
 pub fn fb(n: u64) -> String {
@@ -74,57 +75,64 @@ pub fn combo(ui: &mut Ui, id: &str, value: &mut String, options: &[&str], width:
 impl App {
     // ---------------------------------------------------------------- Organize
     pub fn organize_ui(&mut self, ui: &mut Ui) {
-        let idle = self.idle();
+        let watching = self.org.watcher.is_some();
+        // Manual runs and the watcher would race over the same files.
+        let idle = self.idle() && !watching;
         widgets::card(ui, |ui| {
-            widgets::folder_picker(
-                ui,
-                sfo_core::i18n::t("source_folder").trim(),
-                &mut self.org.source,
-            );
-            widgets::folder_picker(
-                ui,
-                sfo_core::i18n::t("dest_folder").trim(),
-                &mut self.org.dest,
-            );
-            ui.horizontal(|ui| {
-                ui.label(sfo_core::i18n::t("strategy"));
-                combo(
+            ui.add_enabled_ui(!watching, |ui| {
+                widgets::folder_picker(
                     ui,
-                    "org_strategy",
-                    &mut self.org.strategy,
-                    &["extension", "date", "size", "regex"],
-                    110.0,
+                    sfo_core::i18n::t("source_folder").trim(),
+                    &mut self.org.source,
                 );
-                ui.checkbox(&mut self.org.dry_run, sfo_core::i18n::t("dry_run"));
-                ui.checkbox(
-                    &mut self.org.smart_receipts,
-                    sfo_core::i18n::t("smart_receipts"),
+                widgets::folder_picker(
+                    ui,
+                    sfo_core::i18n::t("dest_folder").trim(),
+                    &mut self.org.dest,
                 );
-                ui.checkbox(&mut self.org.sub_date, "Sub-date");
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if widgets::button_enabled(
+                ui.horizontal(|ui| {
+                    ui.label(sfo_core::i18n::t("strategy"));
+                    combo(
                         ui,
-                        Kind::Secondary,
-                        &sfo_core::i18n::t("preview_actions"),
-                        idle,
-                    )
-                    .clicked()
-                    {
-                        self.preview_organize(false);
-                    }
-                    if widgets::button_enabled(
-                        ui,
-                        Kind::Primary,
-                        &sfo_core::i18n::t("execute_now"),
-                        idle,
-                    )
-                    .clicked()
-                    {
-                        self.execute_organize_clicked();
-                    }
+                        "org_strategy",
+                        &mut self.org.strategy,
+                        &["extension", "date", "size", "regex"],
+                        110.0,
+                    );
+                    ui.checkbox(&mut self.org.dry_run, sfo_core::i18n::t("dry_run"));
+                    ui.checkbox(
+                        &mut self.org.smart_receipts,
+                        sfo_core::i18n::t("smart_receipts"),
+                    );
+                    ui.checkbox(&mut self.org.sub_date, "Sub-date");
+                    ui.checkbox(&mut self.org.recursive, "Include subfolders");
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if widgets::button_enabled(
+                            ui,
+                            Kind::Secondary,
+                            &sfo_core::i18n::t("preview_actions"),
+                            idle,
+                        )
+                        .clicked()
+                        {
+                            self.preview_organize(false);
+                        }
+                        if widgets::button_enabled(
+                            ui,
+                            Kind::Primary,
+                            &sfo_core::i18n::t("execute_now"),
+                            idle,
+                        )
+                        .clicked()
+                        {
+                            self.execute_organize_clicked();
+                        }
+                    });
                 });
             });
         });
+        ui.add_space(theme::GAP_SECTION);
+        self.watcher_ui(ui);
         ui.add_space(theme::GAP_SECTION);
         widgets::stat_row(
             ui,
@@ -151,6 +159,118 @@ impl App {
             &self.org.rows,
             None,
         );
+    }
+
+    /// Folder watcher card: start/stop and the most recent events.
+    fn watcher_ui(&mut self, ui: &mut Ui) {
+        let watching = self.org.watcher.is_some();
+        let idle = self.idle();
+        widgets::card(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(theme::header("👁 Folder Watcher"));
+                    ui.label(theme::muted(
+                        "Organizes new files in the Source Folder as soon as each download finishes, \
+                         using the folders and strategy above. Every file is its own undoable session.",
+                    ));
+                });
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if watching {
+                        if widgets::button(ui, Kind::Danger, "🛑 Stop Watching").clicked() {
+                            self.stop_watch();
+                        }
+                    } else if widgets::button_enabled(ui, Kind::Primary, "👁 Start Watching", idle)
+                        .clicked()
+                    {
+                        self.start_watch();
+                    }
+                });
+            });
+            if watching {
+                ui.label(theme::status_title(
+                    &format!(
+                        "Watching {} — {} files organized",
+                        self.org.watch_target, self.org.watch_count
+                    ),
+                    theme::SUCCESS,
+                ));
+            }
+            if !self.org.watch_log.is_empty() {
+                egui::ScrollArea::vertical()
+                    .id_salt("watch_log")
+                    .max_height(66.0)
+                    .stick_to_bottom(true)
+                    .auto_shrink([false, true])
+                    .show(ui, |ui| {
+                        for line in &self.org.watch_log {
+                            ui.label(
+                                egui::RichText::new(line)
+                                    .font(theme::mono())
+                                    .color(theme::TEXT_MUTED),
+                            );
+                        }
+                    });
+            }
+        });
+    }
+
+    fn start_watch(&mut self) {
+        let Some(source) = self.allowed_dir(&self.org.source.clone()) else {
+            return;
+        };
+        if self.org.dest.trim().is_empty() {
+            self.org.dest = self.org.source.clone();
+        }
+        let dest = PathBuf::from(self.org.dest.trim());
+        if let Some(reason) = sfo_core::guardrails::protected_reason(&dest) {
+            self.error(&sfo_core::i18n::t("guardrail_alert"), reason);
+            return;
+        }
+        let Some(undo) = self.undo.clone() else {
+            self.error(
+                "Watcher unavailable",
+                "The history database could not be opened, so changes could not be undone.",
+            );
+            return;
+        };
+        let strategy = OrganizeStrategy::parse(&self.org.strategy).unwrap_or_default();
+        let mut w =
+            DirectoryWatcher::new(&source, Some(&dest), strategy, self.config.clone(), undo);
+        w.smart_receipts = self.org.smart_receipts;
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = w.spawn(Some(Box::new(move |file: &str, target: &str| {
+            let _ = tx.send(format!("{file} → {target}"));
+        })));
+        self.org.watch_target = source.display().to_string();
+        self.org.watch_count = 0;
+        self.org.watch_log.push(format!(
+            "{}  Started watching {}",
+            chrono::Local::now().format("%H:%M:%S"),
+            self.org.watch_target
+        ));
+        self.org.watcher = Some(handle);
+        self.org.watch_rx = Some(rx);
+        self.status = format!("Watching {} for new files.", self.org.watch_target);
+    }
+
+    fn stop_watch(&mut self) {
+        if let Some(mut h) = self.org.watcher.take() {
+            h.stop();
+        }
+        // Keep whatever the watcher reported before it stopped.
+        if let Some(rx) = self.org.watch_rx.take() {
+            while let Ok(line) = rx.try_recv() {
+                self.org.watch_count += 1;
+                self.org.watch_log.push(line);
+            }
+        }
+        self.org.watch_log.push(format!(
+            "{}  Stopped ({} files organized)",
+            chrono::Local::now().format("%H:%M:%S"),
+            self.org.watch_count
+        ));
+        self.load_history();
+        self.status = sfo_core::i18n::t("status_ready");
     }
 
     pub fn preview_organize(&mut self, then_execute: bool) {
@@ -180,16 +300,18 @@ impl App {
             sub_organize_by_date: self.org.sub_date,
             smart_receipts: self.org.smart_receipts,
         };
-        self.spawn("Scanning directory files...", move || {
+        let recursive = self.org.recursive;
+        self.spawn_cancellable("Scanning directory files...", move |ctl| {
             let exclude = if paths::path_eq(&paths::resolve(&dest), &paths::resolve(&source)) {
                 vec![]
             } else {
                 vec![dest.clone()]
             };
             let scan = ScanOptions {
-                recursive: false,
+                recursive,
                 exclude_dirs: exclude,
                 max_depth: None,
+                control: Some(ctl),
             };
             let files = FileScanner::new(&config)
                 .scan(&source, &scan, None)
@@ -216,17 +338,22 @@ impl App {
             self.run_organize();
             return;
         }
-        self.dialogs.push(Dialog::confirm(
+        let body = format!(
+            "Are you sure you want to organize {} files in LIVE mode?\n\nSource: {}\nDestination: {}\n\n\
+             (Note: You can undo this operation anytime in the Undo tab!)",
+            self.org.records.len(),
+            self.org.source,
+            self.org.dest
+        );
+        let (count, bytes) = live_size(&self.org.records);
+        self.confirm_live(
             "Confirm Execution",
-            format!(
-                "Are you sure you want to organize {} files in LIVE mode?\n\nSource: {}\nDestination: {}\n\n\
-                 (Note: You can undo this operation anytime in the Undo tab!)",
-                self.org.records.len(),
-                self.org.source,
-                self.org.dest
-            ),
+            body,
             Confirmed::ExecuteOrganize,
-        ));
+            false,
+            count,
+            bytes,
+        );
     }
 
     pub fn run_organize(&mut self) {
@@ -237,9 +364,16 @@ impl App {
         );
         let (config, undo, dry) = (self.config.clone(), self.undo.clone(), self.org.dry_run);
         let strategy = self.org.strategy.clone();
-        self.spawn("Executing file operations...", move || {
-            let session = TransactionExecutor::new(&config)
-                .execute_session(records, &source, &dest, &strategy, dry, None);
+        self.spawn_cancellable("Executing file operations...", move |ctl| {
+            let session = TransactionExecutor::new(&config).execute_session_ctl(
+                records,
+                &source,
+                &dest,
+                &strategy,
+                dry,
+                None,
+                Some(&ctl),
+            );
             let saved = save(undo.as_ref(), &session);
             Done::Session {
                 kind: SessionKind::Organize,
@@ -356,9 +490,10 @@ impl App {
         dedup.insert("keep_policy".into(), self.dup.keep.clone().into());
         config.set("deduplication", serde_json::Value::Object(dedup));
         let (visual, sim) = (self.dup.visual, f64::from(self.dup.similarity) / 100.0);
-        self.spawn("Scanning for duplicates...", move || {
+        self.spawn_cancellable("Scanning for duplicates...", move |ctl| {
             let opts = ScanOptions {
                 recursive: true,
+                control: Some(ctl.clone()),
                 ..Default::default()
             };
             let files = FileScanner::new(&config)
@@ -368,12 +503,16 @@ impl App {
             if visual {
                 Done::Duplicates {
                     exact: vec![],
-                    visual: dd.find_visual_duplicates(&files, sim),
+                    visual: dd
+                        .find_visual_duplicates_ctl(&files, sim, Some(&ctl))
+                        .unwrap_or_default(),
                     visual_mode: true,
                 }
             } else {
                 Done::Duplicates {
-                    exact: dd.find_duplicates(&files, None),
+                    exact: dd
+                        .find_duplicates_ctl(&files, None, Some(&ctl))
+                        .unwrap_or_default(),
                     visual: vec![],
                     visual_mode: false,
                 }
@@ -479,26 +618,34 @@ impl App {
             self.info("Notice", what);
             return;
         }
-        let n = self.dedupe_records(DedupAction::MoveToDuplicates).len();
-        self.dialogs.push(Dialog::confirm(
+        let records = self.dedupe_records(DedupAction::MoveToDuplicates);
+        let (count, bytes) = live_size(&records);
+        self.confirm_live(
             "Confirm Move",
-            format!("Move {n} duplicate files to '_Duplicates' folder?"),
+            format!(
+                "Move {} duplicate files to '_Duplicates' folder?",
+                records.len()
+            ),
             Confirmed::MoveDuplicates,
-        ));
+            false,
+            count,
+            bytes,
+        );
     }
 
     pub fn run_move_duplicates(&mut self, mode: DedupAction) {
         let records = self.dedupe_records(mode);
         let dir = PathBuf::from(self.dup.folder.trim());
         let (config, undo) = (self.config.clone(), self.undo.clone());
-        self.spawn("Moving duplicates...", move || {
-            let session = TransactionExecutor::new(&config).execute_session(
+        self.spawn_cancellable("Moving duplicates...", move |ctl| {
+            let session = TransactionExecutor::new(&config).execute_session_ctl(
                 records,
                 &dir,
                 &dir,
                 "deduplication",
                 false,
                 None,
+                Some(&ctl),
             );
             let saved = save(undo.as_ref(), &session);
             Done::Session {
@@ -594,8 +741,14 @@ impl App {
             case_transform: (self.ren.case != "None").then(|| self.ren.case.clone()),
             ..Default::default()
         };
-        self.spawn("Planning rename...", move || {
-            let files = FileScanner::new(&config).scan_dir(&dir).unwrap_or_default();
+        self.spawn_cancellable("Planning rename...", move |ctl| {
+            let scan = ScanOptions {
+                control: Some(ctl),
+                ..Default::default()
+            };
+            let files = FileScanner::new(&config)
+                .scan(&dir, &scan, None)
+                .unwrap_or_default();
             Done::RenamePreview {
                 records: renamer::plan_rename(&files, &opts),
                 then_execute,
@@ -624,23 +777,34 @@ impl App {
     }
 
     fn confirm_rename(&mut self) {
-        self.dialogs.push(Dialog::confirm(
+        let (count, bytes) = live_size(&self.ren.records);
+        self.confirm_live(
             "Confirm Rename",
             format!(
                 "Are you sure you want to rename {} files?",
                 self.ren.records.len()
             ),
             Confirmed::RenameFiles,
-        ));
+            false,
+            count,
+            bytes,
+        );
     }
 
     pub fn run_rename(&mut self) {
         let records = std::mem::take(&mut self.ren.records);
         let dir = PathBuf::from(self.ren.folder.trim());
         let (config, undo) = (self.config.clone(), self.undo.clone());
-        self.spawn("Renaming files...", move || {
-            let session = TransactionExecutor::new(&config)
-                .execute_session(records, &dir, &dir, "rename", false, None);
+        self.spawn_cancellable("Renaming files...", move |ctl| {
+            let session = TransactionExecutor::new(&config).execute_session_ctl(
+                records,
+                &dir,
+                &dir,
+                "rename",
+                false,
+                None,
+                Some(&ctl),
+            );
             let saved = save(undo.as_ref(), &session);
             Done::Session {
                 kind: SessionKind::Rename,
@@ -739,9 +903,15 @@ impl App {
         let Some(dir) = self.existing_dir(&self.store.folder.clone()) else {
             return;
         };
-        self.spawn("Analyzing disk storage...", move || {
-            let root = treemap::analyze_directory(&dir, 2);
-            let largest = treemap::find_largest_files(&dir, 15);
+        self.spawn_cancellable("Analyzing disk storage...", move |ctl| {
+            let Ok(root) = treemap::analyze_directory_ctl(&dir, 2, Some(&ctl)) else {
+                return Done::Cancelled;
+            };
+            let largest = if ctl.is_cancelled() {
+                Vec::new()
+            } else {
+                treemap::find_largest_files(&dir, 15)
+            };
             Done::Storage {
                 root: Box::new(root),
                 largest,
@@ -766,6 +936,14 @@ impl App {
         self.status = format!("Storage analysis complete: {}.", fb(root.size));
         self.store.root = Some(root);
     }
+}
+
+/// `(files, bytes)` that would really be touched (everything but `SKIP`).
+pub fn live_size(records: &[ActionRecord]) -> (u64, u64) {
+    records
+        .iter()
+        .filter(|r| r.action_type != ActionType::Skip)
+        .fold((0, 0), |(c, b), r| (c + 1, b + r.file_size))
 }
 
 pub fn save(

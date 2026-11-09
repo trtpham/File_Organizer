@@ -28,6 +28,10 @@
     "Large (100MB - 1GB)": [104857600, 1073741824],
     "Huge (> 1GB)": [1073741824, -1]
   },
+  "blast_radius": {
+    "max_files": 500,
+    "max_bytes": 10737418240
+  },
   "deduplication": {
     "hash_algorithm": "sha256",
     "partial_chunk_bytes": 65536,

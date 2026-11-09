@@ -25,7 +25,7 @@ impl App {
                     if widgets::button_enabled(ui, Kind::Primary, &i18n::t("run_diagnostics"), idle)
                         .clicked()
                     {
-                        self.spawn("Running system self-diagnostics...", || {
+                        self.spawn("Running system self-diagnostics...", |_ctl| {
                             Done::Doctor(doctor::run_full_diagnosis(None))
                         });
                     }
@@ -144,7 +144,7 @@ impl App {
 
     pub fn run_undo(&mut self, id: String) {
         let undo = self.undo.clone();
-        self.spawn("Rolling back session...", move || {
+        self.spawn("Rolling back session...", move |_ctl| {
             Done::Undone(match undo {
                 Some(u) => u.rollback_session(Some(&id)).map_err(|e| e.to_string()),
                 None => Err("history database unavailable".into()),
@@ -168,6 +168,148 @@ impl App {
             .into_iter()
             .map(|(c, e)| vec![c, e.join(", ")])
             .collect();
+        if !self.sys.rules_dirty {
+            self.sys.rules = self.config.custom_regex_rules();
+        }
+    }
+
+    /// Config with the rules currently in the editor (saved or not).
+    fn config_with_rules(&self) -> sfo_core::config::Config {
+        let mut cfg = self.config.clone();
+        let rules: Vec<serde_json::Value> = self
+            .sys
+            .rules
+            .iter()
+            .map(|(p, f)| serde_json::json!({"pattern": p.trim(), "folder": f.trim()}))
+            .collect();
+        cfg.set("custom_regex_rules", serde_json::Value::Array(rules));
+        cfg
+    }
+
+    fn save_rules(&mut self) {
+        let cfg = self.config_with_rules();
+        match cfg.save_user_config() {
+            Ok(path) => {
+                self.config = cfg;
+                self.sys.rules_dirty = false;
+                self.refresh_settings();
+                self.info(
+                    "Rules Saved",
+                    format!(
+                        "Saved {} regex rules to:\n{}",
+                        self.sys.rules.len(),
+                        path.display()
+                    ),
+                );
+            }
+            Err(e) => self.error("Error", format!("Could not save the rules:\n{e}")),
+        }
+    }
+
+    /// Editor for the `regex` strategy's rules.
+    fn rules_ui(&mut self, ui: &mut Ui) {
+        use sfo_core::organizer::validate_rule;
+        widgets::card(ui, |ui| {
+            ui.label(theme::header("Custom Regex Rules"));
+            ui.label(theme::muted(
+                "Used by the 'regex' strategy. Rules are checked top to bottom: the first pattern that \
+                 matches the file name (case-insensitive) picks the folder. Files that match nothing go \
+                 to their extension category.",
+            ));
+            let mut remove = None;
+            let mut changed = false;
+            if self.sys.rules.is_empty() {
+                ui.label(theme::muted("No rules yet."));
+            } else {
+                egui::Grid::new("regex_rules")
+                    .num_columns(4)
+                    .spacing([8.0, 6.0])
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new("Pattern").font(theme::bold(theme::BODY)));
+                        ui.label(egui::RichText::new("Folder").font(theme::bold(theme::BODY)));
+                        ui.label("");
+                        ui.label("");
+                        ui.end_row();
+                        for (i, (pattern, folder)) in self.sys.rules.iter_mut().enumerate() {
+                            // add_sized: Grid columns otherwise shrink to the text.
+                            changed |= ui
+                                .add_sized(
+                                    [320.0, theme::BUTTON_HEIGHT],
+                                    egui::TextEdit::singleline(pattern).hint_text("^invoice_"),
+                                )
+                                .changed();
+                            changed |= ui
+                                .add_sized(
+                                    [220.0, theme::BUTTON_HEIGHT],
+                                    egui::TextEdit::singleline(folder)
+                                        .hint_text("Finance/Invoices"),
+                                )
+                                .changed();
+                            match validate_rule(pattern, folder) {
+                                Ok(()) => ui.label(egui::RichText::new("✔").color(theme::SUCCESS)),
+                                Err(e) => ui
+                                    .label(egui::RichText::new("✖").color(theme::DANGER))
+                                    .on_hover_text(e),
+                            };
+                            if widgets::button(ui, Kind::Danger, "Remove").clicked() {
+                                remove = Some(i);
+                            }
+                            ui.end_row();
+                        }
+                    });
+            }
+            if let Some(i) = remove {
+                self.sys.rules.remove(i);
+                changed = true;
+            }
+            if changed {
+                self.sys.rules_dirty = true;
+            }
+            let all_valid = self
+                .sys
+                .rules
+                .iter()
+                .all(|(p, f)| validate_rule(p, f).is_ok());
+            ui.horizontal(|ui| {
+                ui.label("Test file name:");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.sys.rule_test)
+                        .desired_width(200.0)
+                        .hint_text("invoice_2026.pdf"),
+                );
+                let name = self.sys.rule_test.trim().to_string();
+                if !name.is_empty() {
+                    let cfg = self.config_with_rules();
+                    let folder = sfo_core::organizer::Organizer::new(&cfg)
+                        .regex_folder_for(&name, &sfo_core::paths::suffix_lower(&name));
+                    ui.label(
+                        egui::RichText::new(format!("→ {folder}")).font(theme::bold(theme::BODY)),
+                    );
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::button(ui, Kind::Secondary, "➕ Add Rule").clicked() {
+                        self.sys.rules.push((String::new(), String::new()));
+                        self.sys.rules_dirty = true;
+                    }
+                    if widgets::button_enabled(
+                        ui,
+                        Kind::Primary,
+                        "💾 Save Rules",
+                        self.sys.rules_dirty && all_valid,
+                    )
+                    .clicked()
+                    {
+                        self.save_rules();
+                    }
+                });
+            });
+            if !all_valid {
+                ui.label(
+                    egui::RichText::new("Fix the rules marked ✖ before saving.")
+                        .color(theme::WARNING),
+                );
+            }
+        });
     }
 
     fn report(&mut self, r: ActionResult) {
@@ -179,6 +321,13 @@ impl App {
     }
 
     pub fn settings_ui(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical()
+            .id_salt("settings_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| self.settings_body(ui));
+    }
+
+    fn settings_body(&mut self, ui: &mut Ui) {
         widgets::card(ui, |ui| {
             ui.label(theme::header("Enterprise System Preferences"));
             ui.horizontal(|ui| {
@@ -263,6 +412,8 @@ impl App {
             });
         });
         ui.add_space(theme::GAP_SECTION);
+        self.rules_ui(ui);
+        ui.add_space(theme::GAP_SECTION);
         widgets::card(ui, |ui| {
             ui.label(theme::header("Category File Formats"));
             ui.label(theme::muted(&format!(
@@ -272,13 +423,16 @@ impl App {
         });
         ui.add_space(theme::GAP_ROW);
         let rows = self.sys.category_rows.clone();
-        widgets::table(
-            ui,
-            "categories",
-            &["Category Folder", "Supported File Extensions"],
-            &rows,
-            None,
-        );
+        let width = ui.available_width();
+        ui.allocate_ui(egui::vec2(width, 320.0), |ui| {
+            widgets::table(
+                ui,
+                "categories",
+                &["Category Folder", "Supported File Extensions"],
+                &rows,
+                None,
+            );
+        });
     }
 
     // --------------------------------------------------------- Job results
@@ -312,6 +466,19 @@ impl App {
                     String::new()
                 } else {
                     format!("\n\nFailed:\n{}", failed.join("\n"))
+                };
+                let cancelled = session
+                    .records
+                    .iter()
+                    .filter(|r| r.message.starts_with("Cancelled"))
+                    .count();
+                let failures = if cancelled == 0 {
+                    failures
+                } else {
+                    format!(
+                        "{failures}\n\nCancelled: {cancelled} files were left untouched. \
+                         What was done can be undone in the Undo tab."
+                    )
                 };
                 match kind {
                     SessionKind::Organize => {
@@ -560,6 +727,9 @@ impl App {
                     r.fail_count()
                 );
                 self.status = "Doctor diagnosis complete.".into();
+            }
+            Done::Cancelled => {
+                self.status = "Cancelled. Nothing was changed.".into();
             }
             Done::Undone(r) => match r {
                 Ok(res) if res.success => {

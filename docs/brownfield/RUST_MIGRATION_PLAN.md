@@ -101,6 +101,9 @@ Recorded so P5/P6 parity reviews don't flag them as regressions.
 | LAN Drop | No upload cap; overwrote same-name uploads; PIN compare not constant-time; bad Range → 500 | 512 MiB cap (413); unique names; constant-time; 416 | Hardening |
 | Google Drive detect | Any existing `F:`–`J:` drive root counted | Only drives with `My Drive` | USB sticks misdetected |
 | Watcher | Polling | Polling (same algorithm); `notify` not needed | Parity |
+| Blast radius | `check_blast_radius` existed but was never called; README promised `--force` | Enforced: CLI refuses live operations over the limit without `--force`; GUI asks with a red confirmation; limits in `blast_radius` config | Safety (PO request 2026-11-09) |
+| Long jobs | No progress, no cancel | Progress bar + Cancel in the GUI; cancelled moves stop between files and stay undoable | PO request 2026-11-09 |
+| GUI scope | No recursive organize, no watcher, regex rules only via JSON | Include-subfolders option, Folder Watcher card, regex rules editor (unsafe target folders rejected) | PO request 2026-11-09 |
 | Data directory | Always `~/.smart_file_organizer` | `SFO_DATA_DIR` overrides it (portable installs, isolated tests) | Testability |
 | CLI | argparse | clap with the same flags/defaults/choices; adds `--vault-upgrade`, `slugify` for `--rename-case`; usage errors still exit 2; `sfo` with no args opens the GUI | D4 / parity |
 | Explorer menu, autostart, schtasks | Point at `python main.py` | Point at the `sfo` executable next to the running binary | Native build |

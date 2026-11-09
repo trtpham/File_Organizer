@@ -21,6 +21,7 @@ pub mod models;
 pub mod organizer;
 pub mod paths;
 pub mod platform;
+pub mod progress;
 pub mod pyjson;
 pub mod renamer;
 pub mod reporter;

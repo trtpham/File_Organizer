@@ -69,9 +69,12 @@ On Windows the program is `sfo.exe`. All examples work the same on Linux and mac
 | `-w` | `--watch` | Run background watcher daemon with debounce | `False` |
 | | `--report FILE` | Generate standalone HTML dashboard report | `None` |
 | `-c` | `--config FILE` | Path to custom `config.json` | Default config |
+| | `--force` | Run a live operation even when it exceeds the blast-radius limit | `False` |
 | `-g` | `--gui` | Launch the desktop app (`sfo-gui`, must sit next to `sfo`) | `False` |
 | `-h` | `--help` | Show all options | |
 | `-V` | `--version` | Show the version | |
+
+Live operations (organize, dedupe, rename, `--clean-junk`, `--archive-delete-sources`, shredding a folder) stop with exit code 1 and change nothing when they would touch more than `blast_radius.max_files` files (default 500) or `blast_radius.max_bytes` bytes (default 10 GB); preview with `--dry-run`, then add `--force`. Set the limits in your `config.json`.
 
 Running `sfo` with no arguments opens the desktop app. Invalid options exit
 with code 2; failed operations exit with code 1.

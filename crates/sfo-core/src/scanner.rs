@@ -7,9 +7,11 @@ use crate::config::Config;
 use crate::error::{Result, SfoError};
 use crate::models::FileInfo;
 use crate::paths;
+use crate::progress::{self, Control};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Scan options. `Default` = non-recursive, no excludes, unlimited depth.
 #[derive(Debug, Clone, Default)]
@@ -19,6 +21,8 @@ pub struct ScanOptions {
     /// For recursive scans: directories at this depth (root = 0) are listed
     /// but not descended into.
     pub max_depth: Option<usize>,
+    /// Progress + cancellation; a cancelled scan returns [`SfoError::Cancelled`].
+    pub control: Option<Arc<Control>>,
 }
 
 /// Progress callback: `(files_found, current_file_name)`.
@@ -54,6 +58,8 @@ impl<'c> FileScanner<'c> {
             return Err(SfoError::NotADirectory(root));
         }
 
+        let ctl = opts.control.as_deref();
+        progress::stage(ctl, "Scanning files", 0);
         let mut found = Vec::new();
         if opts.recursive {
             let excludes: Vec<PathBuf> = opts
@@ -70,9 +76,13 @@ impl<'c> FileScanner<'c> {
                 &mut visited,
                 &mut found,
                 &mut progress,
+                ctl,
             );
         } else if let Ok(entries) = fs::read_dir(&root) {
             for entry in entries.flatten() {
+                if progress::cancelled(ctl) {
+                    break;
+                }
                 // `entry.is_file(follow_symlinks=False)`: regular files only.
                 let Ok(ft) = entry.file_type() else { continue };
                 if !ft.is_file() {
@@ -84,11 +94,15 @@ impl<'c> FileScanner<'c> {
                 }
                 if let Ok(info) = FileInfo::from_path(&entry.path()) {
                     found.push(info);
+                    progress::tick(ctl, 1);
                     if let Some(cb) = progress.as_mut() {
                         cb(found.len(), &name);
                     }
                 }
             }
+        }
+        if progress::cancelled(ctl) {
+            return Err(SfoError::Cancelled);
         }
         Ok(found)
     }
@@ -103,9 +117,10 @@ impl<'c> FileScanner<'c> {
         visited: &mut HashSet<PathBuf>,
         found: &mut Vec<FileInfo>,
         progress: &mut Option<ScanProgress<'_>>,
+        ctl: Option<&Control>,
     ) {
         // Loop protection (junctions / bind mounts).
-        if !visited.insert(paths::resolve(dir)) {
+        if progress::cancelled(ctl) || !visited.insert(paths::resolve(dir)) {
             return;
         }
         let Ok(entries) = fs::read_dir(dir) else {
@@ -128,8 +143,12 @@ impl<'c> FileScanner<'c> {
             if self.config.is_ignored(&name) {
                 continue;
             }
+            if progress::cancelled(ctl) {
+                return;
+            }
             if let Ok(info) = FileInfo::from_path(&path) {
                 found.push(info);
+                progress::tick(ctl, 1);
                 if let Some(cb) = progress.as_mut() {
                     cb(found.len(), &name);
                 }
@@ -155,6 +174,7 @@ impl<'c> FileScanner<'c> {
                 visited,
                 found,
                 progress,
+                ctl,
             );
         }
     }
@@ -200,6 +220,7 @@ mod tests {
             recursive: true,
             exclude_dirs: vec![d.path().join("excluded")],
             max_depth: None,
+            control: None,
         };
         let all = names(&s.scan(d.path(), &opts, None).unwrap());
         assert_eq!(
@@ -211,6 +232,7 @@ mod tests {
             recursive: true,
             exclude_dirs: vec![],
             max_depth: Some(1),
+            control: None,
         };
         let shallow = names(&s.scan(d.path(), &opts, None).unwrap());
         assert!(shallow.contains("mid.txt") && !shallow.contains("deep.txt"));

@@ -22,6 +22,9 @@ pub enum SfoError {
 
     #[error("invalid configuration: {0}")]
     Config(String),
+
+    #[error("Operation cancelled.")]
+    Cancelled,
 }
 
 /// Result alias for core operations.

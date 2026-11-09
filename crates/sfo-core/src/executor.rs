@@ -38,7 +38,33 @@ impl<'c> TransactionExecutor<'c> {
         destination_dir: &Path,
         strategy: &str,
         dry_run: bool,
+        progress: Option<ExecProgress<'_>>,
+    ) -> SessionLog {
+        self.execute_session_ctl(
+            records,
+            source_dir,
+            destination_dir,
+            strategy,
+            dry_run,
+            progress,
+            None,
+        )
+    }
+
+    /// [`Self::execute_session`] with progress and cancellation. Once `ctl`
+    /// is cancelled, the remaining records are marked `SKIPPED` ("Cancelled")
+    /// without touching their files; everything already done stays recorded
+    /// in the returned session, so it can still be undone.
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute_session_ctl(
+        &self,
+        records: Vec<ActionRecord>,
+        source_dir: &Path,
+        destination_dir: &Path,
+        strategy: &str,
+        dry_run: bool,
         mut progress: Option<ExecProgress<'_>>,
+        ctl: Option<&crate::progress::Control>,
     ) -> SessionLog {
         let mut log = SessionLog::new(new_session_id(), paths::now_naive());
         log.source_dir = source_dir.display().to_string();
@@ -49,8 +75,21 @@ impl<'c> TransactionExecutor<'c> {
 
         let policy = self.config.collision_strategy();
         let total = records.len();
+        crate::progress::stage(
+            ctl,
+            if dry_run {
+                "Simulating"
+            } else {
+                "Moving files"
+            },
+            total as u64,
+        );
         for (i, mut rec) in records.into_iter().enumerate() {
             if rec.action_type == ActionType::Skip {
+                log.skipped_count += 1;
+            } else if crate::progress::cancelled(ctl) {
+                rec.status = RecordStatus::Skipped;
+                rec.message = "Cancelled before this file was processed".into();
                 log.skipped_count += 1;
             } else {
                 process_record(&mut rec, policy, dry_run);
@@ -71,6 +110,7 @@ impl<'c> TransactionExecutor<'c> {
                     _ => {}
                 }
             }
+            crate::progress::tick(ctl, 1);
             if let Some(cb) = progress.as_mut() {
                 cb(i + 1, total, &rec);
             }

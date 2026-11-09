@@ -54,14 +54,15 @@ keep working.
   XChaCha20-Poly1305; v3 vaults still open and `--vault-upgrade` re-encrypts
   them.
 - **Safety** — operations on drive roots and Windows system folders are
-  refused; a SHA-256 hash-chained audit log records sessions, shreds and vault
+  refused; live operations over 500 files or 10 GB need explicit confirmation
+  (`--force` on the command line); long scans and moves can be cancelled; a SHA-256 hash-chained audit log records sessions, shreds and vault
   actions (`sfo --verify-audit`).
 - **Windows integration** — Explorer right-click menu, start on login,
   Task Scheduler daily runs, toast notifications (all per-user, no admin).
 - **SFO Doctor** — memory, disk headroom, write latency, Explorer menu, cloud
   folders, database and audit-log integrity.
 - **Watcher** — waits for downloads to finish, then organizes each file in its
-  own undoable session.
+  own undoable session; start and stop it from the Organize tab or run `sfo --watch`.
 - **English / Tiếng Việt** interface.
 
 ---

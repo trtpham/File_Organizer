@@ -76,13 +76,35 @@ fn mtime(path: &Path) -> Option<NaiveDateTime> {
 /// Junk directories under `root` older than `inactive_days` (caches always).
 /// `.git` is never entered; matched folders are not descended into.
 pub fn scan_directory(root: &Path, inactive_days: i64) -> Vec<JunkItem> {
-    let cutoff = paths::days_ago(inactive_days);
-    let mut out = Vec::new();
-    scan_into(&paths::resolve(root), cutoff, &mut out);
-    out
+    scan_directory_ctl(root, inactive_days, None).expect("only a Control can cancel")
 }
 
-fn scan_into(dir: &Path, cutoff: NaiveDateTime, out: &mut Vec<JunkItem>) {
+/// [`scan_directory`] that ticks `ctl` per folder and stops when cancelled.
+pub fn scan_directory_ctl(
+    root: &Path,
+    inactive_days: i64,
+    ctl: Option<&crate::progress::Control>,
+) -> crate::Result<Vec<JunkItem>> {
+    crate::progress::stage(ctl, "Looking for junk folders", 0);
+    let cutoff = paths::days_ago(inactive_days);
+    let mut out = Vec::new();
+    scan_into(&paths::resolve(root), cutoff, &mut out, ctl);
+    if crate::progress::cancelled(ctl) {
+        return Err(crate::SfoError::Cancelled);
+    }
+    Ok(out)
+}
+
+fn scan_into(
+    dir: &Path,
+    cutoff: NaiveDateTime,
+    out: &mut Vec<JunkItem>,
+    ctl: Option<&crate::progress::Control>,
+) {
+    if crate::progress::cancelled(ctl) {
+        return;
+    }
+    crate::progress::tick(ctl, 1);
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -113,7 +135,7 @@ fn scan_into(dir: &Path, cutoff: NaiveDateTime, out: &mut Vec<JunkItem>) {
         descend.push(path);
     }
     for d in descend {
-        scan_into(&d, cutoff, out);
+        scan_into(&d, cutoff, out, ctl);
     }
 }
 

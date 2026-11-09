@@ -1,8 +1,10 @@
 //! Exact (3-tier hashing) and visual duplicate detection and resolution.
 
 use crate::config::Config;
+use crate::error::SfoError;
 use crate::hasher;
 use crate::models::{ActionRecord, ActionType, DuplicateGroup, FileInfo, VisualDuplicateGroup};
+use crate::progress::{self, Control};
 use crate::visual_hasher::{self, VisualSimilarityEngine};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -99,8 +101,26 @@ impl<'c> Deduplicator<'c> {
     pub fn find_duplicates(
         &self,
         files: &[FileInfo],
-        mut progress: Option<DedupProgress<'_>>,
+        progress: Option<DedupProgress<'_>>,
     ) -> Vec<DuplicateGroup> {
+        self.find_duplicates_ctl(files, progress, None)
+            .expect("only a Control can cancel")
+    }
+
+    /// [`Self::find_duplicates`] with progress stages and cancellation.
+    pub fn find_duplicates_ctl(
+        &self,
+        files: &[FileInfo],
+        mut progress: Option<DedupProgress<'_>>,
+        ctl: Option<&Control>,
+    ) -> crate::Result<Vec<DuplicateGroup>> {
+        let check = || {
+            if progress::cancelled(ctl) {
+                Err(SfoError::Cancelled)
+            } else {
+                Ok(())
+            }
+        };
         let tier1: Vec<Vec<FileInfo>> =
             group_ordered(files.iter().filter(|f| f.size_bytes > 0).cloned(), |f| {
                 Some(f.size_bytes)
@@ -113,7 +133,9 @@ impl<'c> Deduplicator<'c> {
         }
 
         let mut flat1: Vec<FileInfo> = tier1.iter().flatten().cloned().collect();
-        hasher::populate_hashes_parallel(&mut flat1, false, None, None);
+        progress::stage(ctl, "Hashing file starts", flat1.len() as u64);
+        hasher::populate_hashes_ctl(&mut flat1, false, None, None, ctl);
+        check()?;
         let tier2: Vec<Vec<FileInfo>> =
             group_ordered(flat1, |f| f.partial_hash.clone().map(|h| (f.size_bytes, h)))
                 .into_iter()
@@ -124,7 +146,9 @@ impl<'c> Deduplicator<'c> {
         }
 
         let mut flat2: Vec<FileInfo> = tier2.iter().flatten().cloned().collect();
-        hasher::populate_hashes_parallel(&mut flat2, true, None, None);
+        progress::stage(ctl, "Hashing full files", flat2.len() as u64);
+        hasher::populate_hashes_ctl(&mut flat2, true, None, None, ctl);
+        check()?;
         let policy = self.setting("keep_policy", "oldest");
         let groups: Vec<DuplicateGroup> =
             group_ordered(flat2, |f| f.full_hash.clone().map(|h| (f.size_bytes, h)))
@@ -140,7 +164,7 @@ impl<'c> Deduplicator<'c> {
         if let Some(cb) = progress.as_mut() {
             cb("tier3_complete", groups.len(), tier2.len());
         }
-        groups
+        Ok(groups)
     }
 
     /// One record per non-kept file: `DEDUPLICATE` into `<dest>/_Duplicates`
@@ -184,6 +208,16 @@ impl<'c> Deduplicator<'c> {
         similarity_threshold: f64,
     ) -> Vec<VisualDuplicateGroup> {
         VisualSimilarityEngine::new(similarity_threshold).find_visual_duplicates(files)
+    }
+
+    /// [`Self::find_visual_duplicates`] with progress and cancellation.
+    pub fn find_visual_duplicates_ctl(
+        &self,
+        files: &[FileInfo],
+        similarity_threshold: f64,
+        ctl: Option<&Control>,
+    ) -> crate::Result<Vec<VisualDuplicateGroup>> {
+        VisualSimilarityEngine::new(similarity_threshold).find_visual_duplicates_ctl(files, ctl)
     }
 
     /// Like [`Self::plan_deduplication_actions`], into `_Duplicates/Visual_Duplicates`.

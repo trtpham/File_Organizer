@@ -88,6 +88,7 @@ impl DirectoryWatcher {
             recursive: false,
             exclude_dirs: exclude,
             max_depth: None,
+            control: None,
         };
         let candidates = FileScanner::new(&self.config).scan(&self.source_dir, &opts, None)?;
         let now = Instant::now();

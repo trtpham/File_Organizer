@@ -9,14 +9,31 @@ use std::time::SystemTime;
 /// in `os.walk` order: a directory's files before its subdirectories.
 pub fn walk_files(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    walk_into(root, &mut out);
+    walk_into(root, &mut out, None);
     out
 }
 
-fn walk_into(dir: &Path, out: &mut Vec<PathBuf>) {
+/// [`walk_files`] that ticks `ctl` per file and stops when it is cancelled.
+pub fn walk_files_ctl(
+    root: &Path,
+    ctl: Option<&crate::progress::Control>,
+) -> crate::Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    walk_into(root, &mut out, ctl);
+    if crate::progress::cancelled(ctl) {
+        return Err(crate::SfoError::Cancelled);
+    }
+    Ok(out)
+}
+
+fn walk_into(dir: &Path, out: &mut Vec<PathBuf>, ctl: Option<&crate::progress::Control>) {
+    if crate::progress::cancelled(ctl) {
+        return;
+    }
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
+    let before = out.len();
     let mut subdirs = Vec::new();
     for e in entries.flatten() {
         let Ok(ft) = e.file_type() else { continue };
@@ -31,8 +48,9 @@ fn walk_into(dir: &Path, out: &mut Vec<PathBuf>) {
             out.push(p);
         }
     }
+    crate::progress::tick(ctl, (out.len() - before) as u64);
     for d in subdirs {
-        walk_into(&d, out);
+        walk_into(&d, out, ctl);
     }
 }
 

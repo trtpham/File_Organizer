@@ -12,12 +12,15 @@ use sfo_core::i18n;
 use sfo_core::junk::{CleanResult, JunkItem};
 use sfo_core::lan_share::LanShareServer;
 use sfo_core::models::{ActionRecord, DuplicateGroup, FileInfo, SessionLog, VisualDuplicateGroup};
+use sfo_core::progress::Control;
 use sfo_core::secrets::{QuarantineResult, SecretFinding};
 use sfo_core::syncer::SyncResult;
 use sfo_core::treemap::{DiskNode, LargeFile};
 use sfo_core::undo::{RollbackResult, SessionSummary, UndoManager};
 use sfo_core::vault::VaultMetadata;
+use sfo_core::watcher::WatcherHandle;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 /// Which session a finished execution belongs to.
@@ -74,6 +77,8 @@ pub enum Done {
     },
     Doctor(DoctorReport),
     Undone(Result<RollbackResult, String>),
+    /// A cancellable scan was stopped before it finished.
+    Cancelled,
 }
 
 #[derive(Default)]
@@ -84,12 +89,21 @@ pub struct OrganizeTab {
     pub dry_run: bool,
     pub smart_receipts: bool,
     pub sub_date: bool,
+    /// Include files in subfolders of the source (CLI `-r`).
+    pub recursive: bool,
     pub files: usize,
     pub total_bytes: u64,
     pub planned_moves: usize,
     pub mode_label: String,
     pub records: Vec<ActionRecord>,
     pub rows: Vec<Vec<String>>,
+    /// Running folder watcher, if any.
+    pub watcher: Option<WatcherHandle>,
+    /// "file -> folder" lines sent by the watcher thread.
+    pub watch_rx: Option<Receiver<String>>,
+    pub watch_log: Vec<String>,
+    pub watch_count: usize,
+    pub watch_target: String,
 }
 
 #[derive(Default)]
@@ -180,12 +194,23 @@ pub struct SystemTab {
     pub autostart: bool,
     pub shell_status: String,
     pub category_rows: Vec<Vec<String>>,
+    /// Regex rules being edited: `(pattern, folder)`.
+    pub rules: Vec<(String, String)>,
+    pub rules_dirty: bool,
+    pub rule_test: String,
+}
+
+/// The running background job.
+pub struct Job {
+    pub ctl: Arc<Control>,
+    pub cancellable: bool,
 }
 
 pub struct App {
     pub tab: usize,
     pub status: String,
     pub busy: Option<String>,
+    pub job: Option<Job>,
     pub dialogs: Vec<Dialog>,
     pub config: Config,
     pub undo: Option<UndoManager>,
@@ -224,6 +249,7 @@ impl App {
             tab: 0,
             status: i18n::t("status_ready"),
             busy: None,
+            job: None,
             dialogs: Vec::new(),
             config,
             undo,
@@ -286,16 +312,74 @@ impl App {
     }
 
     /// Runs `work` on a worker thread unless a job is already running.
-    pub fn spawn(&mut self, label: &str, work: impl FnOnce() -> Done + Send + 'static) {
+    pub fn spawn(&mut self, label: &str, work: impl FnOnce(Arc<Control>) -> Done + Send + 'static) {
+        self.spawn_job(label, false, work);
+    }
+
+    /// Like [`Self::spawn`], with a Cancel button in the status bar. A
+    /// cancelled scan reports [`Done::Cancelled`]; a cancelled session still
+    /// reports what it did, so it can be undone.
+    pub fn spawn_cancellable(
+        &mut self,
+        label: &str,
+        work: impl FnOnce(Arc<Control>) -> Done + Send + 'static,
+    ) {
+        self.spawn_job(label, true, work);
+    }
+
+    fn spawn_job(
+        &mut self,
+        label: &str,
+        cancellable: bool,
+        work: impl FnOnce(Arc<Control>) -> Done + Send + 'static,
+    ) {
         if self.busy.is_some() {
             return;
         }
         self.busy = Some(label.to_string());
         self.status = label.to_string();
+        let ctl = Control::new();
+        self.job = Some(Job {
+            ctl: Arc::clone(&ctl),
+            cancellable,
+        });
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(work());
+            let done = work(Arc::clone(&ctl));
+            let done = if cancellable && ctl.is_cancelled() && !matches!(done, Done::Session { .. })
+            {
+                Done::Cancelled
+            } else {
+                done
+            };
+            let _ = tx.send(done);
         });
+    }
+
+    /// Blast-radius warning for a live operation, from the config limits.
+    pub fn blast_warning(&self, count: u64, bytes: u64) -> Option<String> {
+        let (max_files, max_bytes) = self.config.blast_radius();
+        sfo_core::guardrails::check_blast_radius(count, bytes, max_files, max_bytes)
+    }
+
+    /// Queues a confirmation; over the blast-radius limit it becomes a red
+    /// "danger" confirmation that leads with the warning.
+    #[allow(clippy::too_many_arguments)]
+    pub fn confirm_live(
+        &mut self,
+        title: &str,
+        body: String,
+        action: Confirmed,
+        danger: bool,
+        count: u64,
+        bytes: u64,
+    ) {
+        let dialog = match self.blast_warning(count, bytes) {
+            Some(w) => Dialog::confirm_danger(title, format!("⚠ {w}\n\n{body}"), action),
+            None if danger => Dialog::confirm_danger(title, body, action),
+            None => Dialog::confirm(title, body, action),
+        };
+        self.dialogs.push(dialog);
     }
 
     pub fn idle(&self) -> bool {
@@ -367,6 +451,7 @@ impl App {
     fn poll_jobs(&mut self) {
         while let Ok(done) = self.rx.try_recv() {
             self.busy = None;
+            self.job = None;
             self.on_done(done);
         }
     }
@@ -382,6 +467,75 @@ impl App {
             Confirmed::ArchiveCold => self.run_archive(),
             Confirmed::Undo(id) => self.run_undo(id),
         }
+    }
+
+    /// Status text, job progress (bar when the total is known, spinner
+    /// otherwise) and the Cancel button for cancellable jobs.
+    fn status_bar(&mut self, ui: &mut egui::Ui) {
+        let small = |t: &str| RichText::new(t).font(egui::FontId::proportional(theme::SMALL));
+        ui.horizontal(|ui| {
+            let Some(job) = &self.job else {
+                ui.label(small(&self.status));
+                return;
+            };
+            let v = job.ctl.view();
+            ui.label(small(&self.status));
+            if v.total > 0 {
+                let frac = (v.done as f32 / v.total as f32).clamp(0.0, 1.0);
+                ui.add(
+                    egui::ProgressBar::new(frac)
+                        .desired_width(260.0)
+                        .fill(theme::ACCENT)
+                        .text(small(&format!("{} {}/{}", v.stage, v.done, v.total))),
+                );
+            } else {
+                ui.add(egui::Spinner::new().size(12.0).color(theme::ACCENT));
+                if !v.stage.is_empty() {
+                    ui.label(small(&format!("{} — {} items", v.stage, v.done)));
+                }
+            }
+            if job.cancellable {
+                let ctl = Arc::clone(&job.ctl);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ctl.is_cancelled() {
+                        ui.label(theme::muted("Cancelling..."));
+                    } else if crate::widgets::button(
+                        ui,
+                        crate::widgets::Kind::Secondary,
+                        "✖ Cancel",
+                    )
+                    .clicked()
+                    {
+                        ctl.cancel();
+                    }
+                });
+            }
+        });
+    }
+
+    /// Drains watcher events into the log and refreshes history.
+    fn poll_watcher(&mut self, ctx: &egui::Context) {
+        let Some(rx) = &self.org.watch_rx else {
+            return;
+        };
+        let mut got = Vec::new();
+        while let Ok(line) = rx.try_recv() {
+            got.push(line);
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        if got.is_empty() {
+            return;
+        }
+        self.org.watch_count += got.len();
+        for line in got {
+            self.org.watch_log.push(format!(
+                "{}  {line}",
+                chrono::Local::now().format("%H:%M:%S")
+            ));
+        }
+        let extra = self.org.watch_log.len().saturating_sub(200);
+        self.org.watch_log.drain(..extra);
+        self.load_history();
     }
 
     fn header(&self, ui: &mut egui::Ui) {
@@ -509,6 +663,7 @@ impl App {
             self.capture = Some(c);
         }
         self.poll_jobs();
+        self.poll_watcher(ctx);
         if self.busy.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
@@ -542,16 +697,7 @@ impl App {
                         bottom: 8,
                     }),
             )
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if self.busy.is_some() {
-                        ui.add(egui::Spinner::new().size(12.0).color(theme::ACCENT));
-                    }
-                    ui.label(
-                        RichText::new(&self.status).font(egui::FontId::proportional(theme::SMALL)),
-                    );
-                });
-            });
+            .show(ctx, |ui| self.status_bar(ui));
 
         egui::CentralPanel::default()
             .frame(

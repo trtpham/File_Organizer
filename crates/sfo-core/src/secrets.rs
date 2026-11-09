@@ -169,13 +169,33 @@ pub fn scan_file(path: &Path) -> Vec<SecretFinding> {
 
 /// Scans supported files under `root`.
 pub fn scan_directory(root: &Path, recursive: bool) -> Vec<SecretFinding> {
+    scan_directory_ctl(root, recursive, None).expect("only a Control can cancel")
+}
+
+/// [`scan_directory`] with progress (files listed, then files checked) and
+/// cancellation.
+pub fn scan_directory_ctl(
+    root: &Path,
+    recursive: bool,
+    ctl: Option<&crate::progress::Control>,
+) -> crate::Result<Vec<SecretFinding>> {
     let root = paths::resolve(root);
+    crate::progress::stage(ctl, "Listing files", 0);
     let files = if recursive {
-        fsutil::walk_files(&root)
+        fsutil::walk_files_ctl(&root, ctl)?
     } else {
         fsutil::list_files(&root)
     };
-    files.iter().flat_map(|p| scan_file(p)).collect()
+    crate::progress::stage(ctl, "Checking files for secrets", files.len() as u64);
+    let mut out = Vec::new();
+    for p in &files {
+        if crate::progress::cancelled(ctl) {
+            return Err(crate::SfoError::Cancelled);
+        }
+        out.extend(scan_file(p));
+        crate::progress::tick(ctl, 1);
+    }
+    Ok(out)
 }
 
 /// Result of [`quarantine_files`].

@@ -102,6 +102,20 @@ pub fn check_blast_radius(
     None
 }
 
+/// [`check_blast_radius`] over planned records: counts every record that
+/// would touch a file (not `SKIP`) and the bytes involved.
+pub fn check_records(
+    records: &[crate::models::ActionRecord],
+    max_files: u64,
+    max_bytes: u64,
+) -> Option<String> {
+    let active = records
+        .iter()
+        .filter(|r| r.action_type != crate::models::ActionType::Skip);
+    let (count, bytes) = active.fold((0u64, 0u64), |(c, b), r| (c + 1, b + r.file_size));
+    check_blast_radius(count, bytes, max_files, max_bytes)
+}
+
 /// All-zero hash that starts every chain.
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 

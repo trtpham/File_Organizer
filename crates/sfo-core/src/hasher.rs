@@ -156,6 +156,18 @@ pub fn populate_hashes_parallel(
     max_workers: Option<usize>,
     progress: Option<&(dyn Fn(usize, usize) + Sync)>,
 ) {
+    populate_hashes_ctl(files, full, max_workers, progress, None);
+}
+
+/// [`populate_hashes_parallel`] that ticks `ctl` per file and stops picking up
+/// new files once it is cancelled (files already being hashed finish).
+pub fn populate_hashes_ctl(
+    files: &mut [FileInfo],
+    full: bool,
+    max_workers: Option<usize>,
+    progress: Option<&(dyn Fn(usize, usize) + Sync)>,
+    ctl: Option<&crate::progress::Control>,
+) {
     if files.is_empty() {
         return;
     }
@@ -167,7 +179,11 @@ pub fn populate_hashes_parallel(
     let done = AtomicUsize::new(0);
     let work = |files: &mut [FileInfo]| {
         files.par_iter_mut().for_each(|f| {
+            if crate::progress::cancelled(ctl) {
+                return;
+            }
             populate_hashes(f, full);
+            crate::progress::tick(ctl, 1);
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
             if let Some(cb) = progress {
                 cb(n, total);

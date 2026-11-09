@@ -137,7 +137,7 @@ impl App {
             trigger_on_usb: false,
             usb_volume_name: None,
         };
-        self.spawn("Synchronizing...", move || {
+        self.spawn("Synchronizing...", move |_ctl| {
             Done::UsbSynced(syncer::sync(&profile, false))
         });
     }
@@ -221,7 +221,7 @@ impl App {
             provider.name,
             provider.local_path.join(&sub).display()
         ));
-        self.spawn("Syncing to cloud...", move || {
+        self.spawn("Syncing to cloud...", move |_ctl| {
             Done::CloudSynced(cloud::sync_to_cloud(
                 &src,
                 &provider,
@@ -374,11 +374,11 @@ impl App {
             return;
         };
         let days: u64 = self.sync.cold_days.trim().parse().unwrap_or(90);
-        self.spawn(
+        self.spawn_cancellable(
             &format!("Scanning for files inactive >= {days} days..."),
-            move || Done::Cold {
-                files: archiver::scan_cold_files(&dir, days, 0, true),
-                days,
+            move |ctl| match archiver::scan_cold_files_ctl(&dir, days, 0, true, Some(&ctl)) {
+                Ok(files) => Done::Cold { files, days },
+                Err(_) => Done::Cancelled,
             },
         );
     }
@@ -399,23 +399,34 @@ impl App {
             return;
         }
         let zip = self.cold_zip();
-        self.dialogs.push(Dialog::confirm(
+        let body = format!(
+            "Are you sure you want to package {} files into:\n{}?\n\nDelete originals: {}",
+            self.sync.cold_files.len(),
+            sfo_core::fsutil::name_of(&zip),
+            if self.sync.cold_delete { "YES" } else { "NO" }
+        );
+        // Only deleting the originals is destructive enough for the limit.
+        let (count, bytes) = if self.sync.cold_delete {
+            let bytes = self.sync.cold_files.iter().map(|f| f.size_bytes).sum();
+            (self.sync.cold_files.len() as u64, bytes)
+        } else {
+            (0, 0)
+        };
+        self.confirm_live(
             "Confirm Compression",
-            format!(
-                "Are you sure you want to package {} files into:\n{}?\n\nDelete originals: {}",
-                self.sync.cold_files.len(),
-                sfo_core::fsutil::name_of(&zip),
-                if self.sync.cold_delete { "YES" } else { "NO" }
-            ),
+            body,
             Confirmed::ArchiveCold,
-        ));
+            false,
+            count,
+            bytes,
+        );
     }
 
     pub fn run_archive(&mut self) {
         let files = self.sync.cold_files.clone();
         let base = PathBuf::from(self.sync.cold_folder.trim());
         let (zip, delete) = (self.cold_zip(), self.sync.cold_delete);
-        self.spawn("Compressing cold files...", move || {
+        self.spawn("Compressing cold files...", move |_ctl| {
             let r = archiver::create_cold_archive(&files, &zip, Some(&base), delete, None);
             Done::Archived {
                 message: r.message,
@@ -460,14 +471,18 @@ impl App {
                         if self.sec.junk.is_empty() {
                             self.info("Notice", "No junk items discovered. Run 'Scan Junk' first.");
                         } else {
-                            self.dialogs.push(Dialog::confirm_danger(
+                            let bytes = self.sec.junk.iter().map(|j| j.size_bytes).sum();
+                            self.confirm_live(
                                 "Confirm Delete",
                                 format!(
                                     "Are you sure you want to permanently delete {} junk folders?",
                                     self.sec.junk.len()
                                 ),
                                 Confirmed::CleanJunk,
-                            ));
+                                true,
+                                self.sec.junk.len() as u64,
+                                bytes,
+                            );
                         }
                     }
                 });
@@ -487,14 +502,17 @@ impl App {
         let Some(dir) = self.allowed_dir(&self.sec.junk_folder.clone()) else {
             return;
         };
-        self.spawn("Scanning for developer junk...", move || {
-            Done::Junk(junk::scan_directory(&dir, 14))
+        self.spawn_cancellable("Scanning for developer junk...", move |ctl| {
+            match junk::scan_directory_ctl(&dir, 14, Some(&ctl)) {
+                Ok(items) => Done::Junk(items),
+                Err(_) => Done::Cancelled,
+            }
         });
     }
 
     pub fn run_clean_junk(&mut self) {
         let items = self.sec.junk.clone();
-        self.spawn("Cleaning junk...", move || {
+        self.spawn("Cleaning junk...", move |_ctl| {
             Done::JunkCleaned(junk::clean_junk(&items, false))
         });
     }
@@ -554,15 +572,18 @@ impl App {
         let Some(dir) = self.allowed_dir(&self.sec.secret_folder.clone()) else {
             return;
         };
-        self.spawn("Scanning for sensitive credentials...", move || {
-            Done::Secrets(secrets::scan_directory(&dir, true))
+        self.spawn_cancellable("Scanning for sensitive credentials...", move |ctl| {
+            match secrets::scan_directory_ctl(&dir, true, Some(&ctl)) {
+                Ok(found) => Done::Secrets(found),
+                Err(_) => Done::Cancelled,
+            }
         });
     }
 
     pub fn run_quarantine(&mut self) {
         let findings = self.sec.secrets.clone();
         let root = PathBuf::from(self.sec.secret_folder.trim());
-        self.spawn("Quarantining files...", move || {
+        self.spawn("Quarantining files...", move |_ctl| {
             Done::Quarantined(
                 secrets::quarantine_files(&findings, &root).map_err(|e| e.to_string()),
             )
@@ -631,22 +652,36 @@ impl App {
             return;
         }
         let method = SHRED_METHODS[self.sec.shred_method].1;
-        self.dialogs.push(Dialog::confirm_danger(
+        let body = format!(
+            "Are you ABSOLUTELY sure you want to shred:\n\n{}\n\nWiping Standard: {}\n\n\
+             This overwrites the file contents and deletes them. Data CANNOT be recovered!",
+            target.display(),
+            method.as_str().to_uppercase()
+        );
+        let files = if target.is_dir() {
+            sfo_core::fsutil::walk_files(&target)
+        } else {
+            vec![target.clone()]
+        };
+        let bytes = files
+            .iter()
+            .filter_map(|f| std::fs::metadata(f).ok())
+            .map(|m| m.len())
+            .sum();
+        self.confirm_live(
             "CRITICAL: Confirm Permanent Erasure",
-            format!(
-                "Are you ABSOLUTELY sure you want to shred:\n\n{}\n\nWiping Standard: {}\n\n\
-                 This overwrites the file contents and deletes them. Data CANNOT be recovered!",
-                target.display(),
-                method.as_str().to_uppercase()
-            ),
+            body,
             Confirmed::Shred,
-        ));
+            true,
+            files.len() as u64,
+            bytes,
+        );
     }
 
     pub fn run_shred(&mut self) {
         let target = sfo_core::paths::resolve(std::path::Path::new(self.sec.shred_path.trim()));
         let method = SHRED_METHODS[self.sec.shred_method].1;
-        self.spawn("Shredding...", move || {
+        self.spawn("Shredding...", move |_ctl| {
             let audit = AuditLogChain::new(None).ok();
             let name = sfo_core::fsutil::name_of(&target);
             let res = if target.is_file() {
@@ -787,7 +822,7 @@ impl App {
         };
         let shred = self.sec.vault_shred;
         self.sec.vault_pw.clear();
-        self.spawn("Encrypting vault...", move || {
+        self.spawn("Encrypting vault...", move |_ctl| {
             let audit = AuditLogChain::new(None).ok();
             Done::VaultLocked(
                 vault::lock_path(&src, &dst, &pw, shred, KdfParams::default(), audit.as_ref())
@@ -830,7 +865,7 @@ impl App {
             return;
         };
         self.sec.vault_unlock_pw.clear();
-        self.spawn("Decrypting vault...", move || {
+        self.spawn("Decrypting vault...", move |_ctl| {
             let audit = AuditLogChain::new(None).ok();
             Done::VaultUnlocked(
                 vault::unlock_vault(&v, &dest, &pw, audit.as_ref())
@@ -844,7 +879,7 @@ impl App {
         let Some((v, pw)) = self.vault_inputs(" to inspect") else {
             return;
         };
-        self.spawn("Inspecting vault...", move || {
+        self.spawn("Inspecting vault...", move |_ctl| {
             Done::VaultInspected(
                 vault::inspect_vault(&v, &pw)
                     .map(|m| (v, m))

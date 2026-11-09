@@ -58,6 +58,25 @@ fn fb(n: u64) -> String {
     format_bytes(n as f64)
 }
 
+/// Refuses a live operation over the blast-radius limit unless `--force`.
+/// Returns `true` when the caller must stop.
+fn blast_radius_blocks(a: &Args, config: &Config, count: u64, bytes: u64) -> bool {
+    if a.force || a.dry_run {
+        return false;
+    }
+    let (max_files, max_bytes) = config.blast_radius();
+    match guardrails::check_blast_radius(count, bytes, max_files, max_bytes) {
+        Some(warning) => {
+            out::error(&warning);
+            out::info(
+                "Nothing was changed. Re-run with --force to proceed, or narrow the selection.",
+            );
+            true
+        }
+        None => false,
+    }
+}
+
 /// Launches the sibling `sfo-gui` executable.
 pub fn launch_gui(source: Option<&str>) -> Code {
     let gui = platform::sibling_exe("sfo-gui");
@@ -194,13 +213,13 @@ pub fn run(a: Args) -> Code {
         return analyze_disk(&source_or_cwd(&a));
     }
     if a.scan_junk || a.clean_junk {
-        return junk_cmd(&a);
+        return junk_cmd(&a, &config);
     }
     if a.scan_secrets || a.quarantine_secrets {
         return secrets_cmd(&a);
     }
     if a.archive_cold {
-        return archive_cold(&a);
+        return archive_cold(&a, &config);
     }
     if let Some(zip) = &a.restore_archive {
         let zip = resolve(zip);
@@ -264,7 +283,7 @@ pub fn run(a: Args) -> Code {
         return lan_share(&a);
     }
     if let Some(target) = &a.shred {
-        return shred(&a, target);
+        return shred(&a, target, &config);
     }
     if let Some(src) = &a.vault_lock {
         return vault_lock(&a, src);
@@ -428,7 +447,7 @@ fn analyze_disk(target: &Path) -> Code {
     0
 }
 
-fn junk_cmd(a: &Args) -> Code {
+fn junk_cmd(a: &Args, config: &Config) -> Code {
     let target = source_or_cwd(a);
     out::info(&format!(
         "Scanning for disposable developer bloat in: {}...",
@@ -454,6 +473,9 @@ fn junk_cmd(a: &Args) -> Code {
         ));
     }
     if a.clean_junk {
+        if blast_radius_blocks(a, config, items.len() as u64, total) {
+            return 1;
+        }
         out::info("Proceeding to clean junk...");
         let r = junk::clean_junk(&items, a.dry_run);
         out::success(&r.message);
@@ -506,7 +528,7 @@ fn secrets_cmd(a: &Args) -> Code {
     0
 }
 
-fn archive_cold(a: &Args) -> Code {
+fn archive_cold(a: &Args, config: &Config) -> Code {
     let target = source_or_cwd(a);
     out::info(&format!(
         "Scanning for cold files inactive for >= {} days in: {}...",
@@ -534,6 +556,9 @@ fn archive_cold(a: &Args) -> Code {
                 chrono::Local::now().format("%Y%m%d")
             ))
         });
+    if a.archive_delete_sources && blast_radius_blocks(a, config, cold.len() as u64, total) {
+        return 1;
+    }
     out::info(&format!("Compressing into: {}...", dest.display()));
     let r =
         archiver::create_cold_archive(&cold, &dest, Some(&target), a.archive_delete_sources, None);
@@ -570,7 +595,7 @@ fn lan_share(a: &Args) -> Code {
     0
 }
 
-fn shred(a: &Args, target: &str) -> Code {
+fn shred(a: &Args, target: &str, config: &Config) -> Code {
     let target = resolve(target);
     if !target.exists() {
         out::error(&format!(
@@ -617,6 +642,15 @@ fn shred(a: &Args, target: &str) -> Code {
             "Recursively shredding directory tree: {}...",
             target.display()
         ));
+        let files = sfo_core::fsutil::walk_files(&target);
+        let bytes: u64 = files
+            .iter()
+            .filter_map(|f| std::fs::metadata(f).ok())
+            .map(|m| m.len())
+            .sum();
+        if blast_radius_blocks(a, config, files.len() as u64, bytes) {
+            return 1;
+        }
         match shredder::shred_directory(&target, method, true, audit.as_ref(), None) {
             Ok(b) => {
                 out::success(&format!(
@@ -896,6 +930,7 @@ fn organize(a: &Args, config: &Config, undo: &UndoManager) -> Code {
         recursive: a.recursive,
         exclude_dirs: exclude,
         max_depth: None,
+        control: None,
     };
     let files = match FileScanner::new(config).scan(&source, &opts, None) {
         Ok(f) => f,
@@ -1063,6 +1098,18 @@ fn organize(a: &Args, config: &Config, undo: &UndoManager) -> Code {
             "... and {} more planned actions.",
             records.len() - 15
         ));
+    }
+
+    let (max_files, max_bytes) = config.blast_radius();
+    if !a.dry_run
+        && !a.force
+        && let Some(warning) = guardrails::check_records(&records, max_files, max_bytes)
+    {
+        out::error(&warning);
+        out::info(
+            "Nothing was changed. Preview with --dry-run, then re-run with --force to proceed.",
+        );
+        return 1;
     }
 
     let mode_str = if a.dry_run {

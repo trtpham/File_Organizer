@@ -105,19 +105,63 @@ impl<'c> Organizer<'c> {
     }
 
     fn match_regex_rules(&self, f: &FileInfo) -> String {
+        self.regex_folder_for(&f.filename, &f.extension)
+    }
+
+    /// Folder the `regex` strategy picks for a file name: the first valid
+    /// rule whose pattern matches (case-insensitive), else the extension
+    /// category. Used by the organizer and the rule editor's tester.
+    pub fn regex_folder_for(&self, filename: &str, extension: &str) -> String {
         for (pattern, folder) in self.config.custom_regex_rules() {
-            if pattern.is_empty() || folder.is_empty() {
+            if validate_rule(&pattern, &folder).is_err() {
                 continue;
             }
             // Patterns Rust's regex engine cannot compile are skipped, like `re.error`.
             if let Ok(re) = RegexBuilder::new(&pattern).case_insensitive(true).build()
-                && re.is_match(&f.filename)
+                && re.is_match(filename)
             {
                 return folder;
             }
         }
-        self.config.category_for_extension(&f.extension)
+        self.config.category_for_extension(extension)
     }
+}
+
+/// Checks one custom rule. The folder must stay inside the destination:
+/// relative, no `..`, no drive letter.
+pub fn validate_rule(pattern: &str, folder: &str) -> Result<(), String> {
+    if pattern.trim().is_empty() {
+        return Err("Pattern is empty.".into());
+    }
+    if folder.trim().is_empty() {
+        return Err("Folder is empty.".into());
+    }
+    let f = folder.trim();
+    if f.starts_with('/') || f.starts_with('\\') || f.contains(':') {
+        return Err(
+            "Folder must be relative to the destination (no drive or leading slash).".into(),
+        );
+    }
+    if f.split(['/', '\\']).any(|seg| seg == "..") {
+        return Err("Folder must not contain '..'.".into());
+    }
+    if f.chars()
+        .any(|c| matches!(c, '*' | '?' | '"' | '<' | '>' | '|'))
+    {
+        return Err("Folder contains characters not allowed in folder names.".into());
+    }
+    RegexBuilder::new(pattern)
+        .case_insensitive(true)
+        .build()
+        .map(|_| ())
+        .map_err(|e| {
+            e.to_string()
+                .lines()
+                .last()
+                .unwrap_or("Invalid pattern")
+                .trim()
+                .to_string()
+        })
 }
 
 /// Named presets, otherwise a `strftime` format; invalid formats fall back
@@ -248,6 +292,36 @@ mod tests {
             recs[0].destination_path.as_ref().unwrap(),
             &paths::resolve(&want)
         ));
+    }
+
+    #[test]
+    fn rule_validation_and_unsafe_folders() {
+        assert!(validate_rule("^inv", "Bills/2026").is_ok());
+        assert!(validate_rule("", "x").is_err());
+        assert!(validate_rule("a", "").is_err());
+        assert!(validate_rule("(", "x").unwrap_err().len() > 3);
+        for bad in [
+            "../out",
+            "a/../../b",
+            "C:/Windows",
+            "/etc",
+            r"\\server\x",
+            "x*y",
+        ] {
+            assert!(validate_rule("a", bad).is_err(), "{bad}");
+        }
+        let mut cfg = Config::defaults();
+        cfg.set(
+            "custom_regex_rules",
+            json!([{"pattern": "^evil", "folder": "../escape"}, {"pattern": "^inv", "folder": "Bills"}]),
+        );
+        let org = Organizer::new(&cfg);
+        assert_eq!(
+            org.regex_folder_for("evil.txt", ".txt"),
+            "Documents",
+            "unsafe rule skipped"
+        );
+        assert_eq!(org.regex_folder_for("INV_1.pdf", ".pdf"), "Bills");
     }
 
     #[test]

@@ -148,6 +148,21 @@ impl Config {
             .unwrap_or_default()
     }
 
+    /// `(max_files, max_bytes)` before a live operation needs explicit
+    /// confirmation (`blast_radius` in the config; defaults 500 files / 10 GB).
+    pub fn blast_radius(&self) -> (u64, u64) {
+        let b = self.data.get("blast_radius");
+        let get = |k: &str, d: u64| {
+            b.and_then(|b| b.get(k))
+                .and_then(Value::as_u64)
+                .unwrap_or(d)
+        };
+        (
+            get("max_files", crate::guardrails::DEFAULT_MAX_FILES),
+            get("max_bytes", crate::guardrails::DEFAULT_MAX_BYTES),
+        )
+    }
+
     pub fn clean_empty_folders(&self) -> bool {
         self.data
             .get("clean_empty_folders")

@@ -25,14 +25,27 @@ pub fn scan_cold_files(
     min_size_bytes: u64,
     recursive: bool,
 ) -> Vec<FileInfo> {
+    scan_cold_files_ctl(source_dir, inactive_days, min_size_bytes, recursive, None)
+        .expect("only a Control can cancel")
+}
+
+/// [`scan_cold_files`] that ticks `ctl` per file listed and stops when cancelled.
+pub fn scan_cold_files_ctl(
+    source_dir: &Path,
+    inactive_days: u64,
+    min_size_bytes: u64,
+    recursive: bool,
+    ctl: Option<&crate::progress::Control>,
+) -> Result<Vec<FileInfo>> {
     let root = paths::resolve(source_dir);
     if !root.exists() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
     let threshold = Duration::from_secs(inactive_days * 86_400);
     let now = SystemTime::now();
+    crate::progress::stage(ctl, "Listing files", 0);
     let files = if recursive {
-        fsutil::walk_files(&root)
+        fsutil::walk_files_ctl(&root, ctl)?
     } else {
         fsutil::list_files(&root)
     };
@@ -53,7 +66,7 @@ pub fn scan_cold_files(
         })
         .collect();
     cold.sort_by_key(|f| std::cmp::Reverse(f.size_bytes));
-    cold
+    Ok(cold)
 }
 
 /// One manifest entry.

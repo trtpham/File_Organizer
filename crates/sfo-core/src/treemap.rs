@@ -38,20 +38,42 @@ impl DiskNode {
 
 /// Size tree of `root`; nodes deeper than `max_depth` are summarized.
 pub fn analyze_directory(root: &Path, max_depth: usize) -> DiskNode {
+    analyze_directory_ctl(root, max_depth, None).expect("only a Control can cancel")
+}
+
+/// [`analyze_directory`] that ticks `ctl` per entry and stops when cancelled.
+pub fn analyze_directory_ctl(
+    root: &Path,
+    max_depth: usize,
+    ctl: Option<&crate::progress::Control>,
+) -> crate::Result<DiskNode> {
+    crate::progress::stage(ctl, "Measuring folders", 0);
     let root = paths::resolve(root);
     let name = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| root.display().to_string());
     let mut node = DiskNode::new(name, root, true);
-    populate(&mut node, 0, max_depth);
-    node
+    populate(&mut node, 0, max_depth, ctl);
+    if crate::progress::cancelled(ctl) {
+        return Err(crate::SfoError::Cancelled);
+    }
+    Ok(node)
 }
 
-fn populate(node: &mut DiskNode, depth: usize, max_depth: usize) -> u64 {
+fn populate(
+    node: &mut DiskNode,
+    depth: usize,
+    max_depth: usize,
+    ctl: Option<&crate::progress::Control>,
+) -> u64 {
     let mut total = 0;
     if let Ok(entries) = fs::read_dir(&node.path) {
         for e in entries.flatten() {
+            if crate::progress::cancelled(ctl) {
+                break;
+            }
+            crate::progress::tick(ctl, 1);
             let Ok(ft) = e.file_type() else { continue };
             let name = e.file_name().to_string_lossy().into_owned();
             if ft.is_file() {
@@ -65,7 +87,7 @@ fn populate(node: &mut DiskNode, depth: usize, max_depth: usize) -> u64 {
             } else if ft.is_dir() {
                 let mut child = DiskNode::new(name, e.path(), true);
                 child.size = if depth < max_depth {
-                    populate(&mut child, depth + 1, max_depth)
+                    populate(&mut child, depth + 1, max_depth, ctl)
                 } else {
                     crate::fsutil::dir_size(&child.path)
                 };

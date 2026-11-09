@@ -380,8 +380,134 @@ fn click_through_all_tabs() {
         "{msgs:?}"
     );
 
+    // ------------------------------------------ Organize: include subfolders
+    write(&ws_path.join("deep/top.txt"), b"t");
+    write(&ws_path.join("deep/nested/pic.png"), b"p");
+    {
+        let a = app(&mut h);
+        a.tab = 0;
+        a.org.source = ws_path.join("deep").display().to_string();
+        a.org.dest = String::new();
+        a.org.dry_run = false;
+        a.org.recursive = false;
+    }
+    h.step();
+    click(&mut h, "🔍 Preview Actions");
+    settle(&mut h);
+    assert_eq!(app(&mut h).org.files, 1, "subfolders skipped by default");
+    click(&mut h, "Include subfolders");
+    assert!(app(&mut h).org.recursive);
+    click(&mut h, "🔍 Preview Actions");
+    settle(&mut h);
+    assert_eq!(app(&mut h).org.files, 2, "nested file included");
+
+    // -------------------------------------------- Blast radius confirmation
+    app(&mut h)
+        .config
+        .set("blast_radius", serde_json::json!({"max_files": 1}));
+    click(&mut h, "⚡ Execute Now");
+    let d = app(&mut h).dialogs[0].clone();
+    assert!(d.danger, "over the limit the confirmation turns red");
+    assert!(
+        d.body.starts_with("⚠ Operation impacts 2 files"),
+        "{}",
+        d.body
+    );
+    click(&mut h, "No");
+    assert!(
+        ws_path.join("deep/nested/pic.png").exists(),
+        "declining changes nothing"
+    );
+    app(&mut h)
+        .config
+        .set("blast_radius", serde_json::json!({"max_files": 500}));
+
+    // ------------------------------------------------ Progress and Cancel
+    for i in 0..3000 {
+        write(&ws_path.join(format!("big/{}/f{i}.bin", i % 20)), b"x");
+    }
+    {
+        let a = app(&mut h);
+        a.tab = 1;
+        a.dup.folder = ws_path.join("big").display().to_string();
+        a.dup.stats = (7, 7, 7);
+    }
+    h.step();
+    click(&mut h, "🔍 Scan Duplicates");
+    assert!(app(&mut h).job.as_ref().is_some_and(|j| j.cancellable));
+    click(&mut h, "✖ Cancel");
+    settle(&mut h);
+    assert_eq!(app(&mut h).status, "Cancelled. Nothing was changed.");
+    assert_eq!(
+        app(&mut h).dup.stats,
+        (7, 7, 7),
+        "a cancelled scan leaves old results alone"
+    );
+
+    // ----------------------------------------------------------- Watcher
+    write(&ws_path.join("inbox/song.mp3"), b"mp3");
+    {
+        let a = app(&mut h);
+        a.tab = 0;
+        a.org.source = ws_path.join("inbox").display().to_string();
+        a.org.dest = String::new();
+        a.config.set(
+            "watcher",
+            serde_json::json!({"debounce_seconds": 0.0, "check_interval_seconds": 0.1}),
+        );
+    }
+    h.step();
+    let sessions_before = app(&mut h).sys.sessions.len();
+    click(&mut h, "👁 Start Watching");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while app(&mut h).org.watch_count == 0 && Instant::now() < deadline {
+        h.step();
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(app(&mut h).org.watch_count, 1);
+    assert!(ws_path.join("inbox/Audio/song.mp3").exists());
+    assert!(
+        app(&mut h).sys.sessions.len() > sessions_before,
+        "watcher sessions are undoable"
+    );
+    click(&mut h, "🛑 Stop Watching");
+    assert!(app(&mut h).org.watcher.is_none());
+
+    // ------------------------------------------------- Regex rules editor
+    app(&mut h).tab = 8;
+    h.step();
+    click(&mut h, "➕ Add Rule");
+    {
+        let a = app(&mut h);
+        a.sys.rules[0] = ("../bad".into(), "../escape".into());
+    }
+    h.step();
+    h.step();
+    assert!(
+        h.query_by_label("Fix the rules marked ✖ before saving.")
+            .is_some()
+    );
+    {
+        let a = app(&mut h);
+        a.sys.rules[0] = ("^inv".into(), "Bills".into());
+        a.sys.rule_test = "INV_2026.pdf".into();
+    }
+    h.step();
+    h.step();
+    let _ = h.get_by_label("→ Bills");
+    click(&mut h, "💾 Save Rules");
+    let msgs = dismiss_all(&mut h);
+    assert!(msgs[0].starts_with("Rules Saved"), "{msgs:?}");
+    let saved = fs::read_to_string(data.path().join("config.json")).unwrap();
+    assert!(saved.contains("^inv") && saved.contains("Bills"));
+    assert_eq!(
+        app(&mut h).config.custom_regex_rules(),
+        [("^inv".to_string(), "Bills".to_string())]
+    );
+
     // ------------------------------------------- Vietnamese interface text
     sfo_core::i18n::set_language("vi");
+    app(&mut h).tab = 0;
     h.step();
     h.step();
     let _ = h.get_by_label("🧹 Sắp xếp & Dọn dẹp");
